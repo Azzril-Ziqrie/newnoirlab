@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="assets/logos/logo-bona1.png">
+    <title>Coming Soon - Bonafest 2027</title>
+    
+    <!-- Memanggil Global CSS milikmu -->
+    <link rel="stylesheet" href="global.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+
+        /* Base & Reset */
+        :root {
+            --bg-color: #ffffff;
+            --text-primary: #0a0a0a;
+            --text-secondary: #555555;
+            --border-color: #eaeaea;
+            --accent-color: #000000;
+        }
+
+        /* Pastikan body dan html mengambil tinggi penuh layar */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            /* Jika ada font bawaan di global.css, baris ini bisa dihapus */
+            font-family: 'JetBrains Mono', monospace; 
+        }
+        
+        /* Konten Tengah */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Ornamen Lingkaran Blur (Background) */
+        .bg-glow {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(0,0,0,0.03) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            z-index: -1;
+            animation: pulse 6s infinite alternate ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .soon-content {
+            max-width: 600px;
+        }
+
+        .icon-wrapper {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: center;
+            animation: fadeUp 0.8s ease-out forwards;
+        }
+
+        .icon-wrapper img {
+            width: 88px;
+            height: auto;
+            display: block;
+        }
+        
+        /* Styling Animasi Ketik (Typewriter) */
+        h1 {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: -1.5px;
+            margin-bottom: 16px;
+            line-height: 1.1;
+            min-height: 1.2em; /* Mencegah layout loncat */
+        }
+
+        /* Kursor berkedip */
+        .cursor {
+            display: inline-block;
+            width: 3px;
+            height: 0.85em;
+            background-color: var(--text-primary);
+            margin-left: 4px;
+            vertical-align: text-bottom;
+            animation: blink 0.8s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* Elemen yang muncul setelah ngetik selesai */
+        .delayed-fade {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        .delayed-fade.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .btn-home {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--accent-color);
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 16px 40px;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-home:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
+            background-color: #222;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .top-nav { padding: 20px; }
+            p { font-size: 1rem; padding: 0 10px; }
+            .bg-glow { width: 300px; height: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header-placeholder"></div>
+
+    <main>
+        <div class="bg-glow"></div>
+        
+        <div class="soon-content">
+            <div class="icon-wrapper">
+                <img src="assets/logos/logo-bona1.png" alt="Bonafest Logo">
+            </div>
+            
+            <!-- Elemen Teks Ketik -->
+            <h1><span id="typewriter-text"></span><span class="cursor"></span></h1>
+            
+            <!-- Konten ini akan muncul setelah ketikan selesai -->
+            <div id="fade-content" class="delayed-fade">
+                <!-- Tambahkan pesan tambahan atau tombol di sini jika diperlukan -->
+                <!-- Contoh: <p>Nantikan sesuatu yang luar biasa.</p> -->
+            </div>
+        </div>
+    </main>
+
+    <script src="navbar.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const textArray = "WE'RE SETTING THE STAGE.".split("");
+            const typingElement = document.getElementById("typewriter-text");
+            const fadeContent = document.getElementById("fade-content");
+            
+            let i = 0;
+            const typingDelay = 100; // Kecepatan ngetik (ms)
+            const startDelay = 500;  // Jeda sebelum mulai ngetik (ms)
+
+            function typeWriter() {
+                if (i < textArray.length) {
+                    typingElement.innerHTML += textArray[i];
+                    i++;
+                    setTimeout(typeWriter, typingDelay);
+                } else {
+                    // Ketikan selesai, munculkan paragraf & tombol
+                    setTimeout(() => {
+                        fadeContent.classList.add("show");
+                    }, 300); // Jeda sedikit setelah selesai ngetik
+                }
+            }
+
+            // Memulai animasi setelah jeda awal
+            setTimeout(typeWriter, startDelay);
+        });
+    </script>
+</body>
+</html>

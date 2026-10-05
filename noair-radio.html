@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noirlab Collective - Noair Radio</title>
+    <link rel="stylesheet" href="global.css">
+    <style>
+        main {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding-bottom: 60px;
+        }
+
+        .title-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0 40px 0;
+        }
+
+        .play-shape {
+            width: 0;
+            height: 0;
+            border-top: clamp(15px, 2.5vw, 25px) solid transparent;
+            border-bottom: clamp(15px, 2.5vw, 25px) solid transparent;
+            border-left: clamp(25px, 4vw, 40px) solid #000000;
+        }
+
+        .page-title {
+            font-size: clamp(3rem, 7vw, 6.5rem);
+            font-weight: 400;
+            letter-spacing: -1.5px;
+            margin: 0;
+        }
+
+        .radio-container {
+            width: 100%;
+            max-width: 1400px;
+            padding: 0 40px;
+        }
+
+        .radio-placeholder {
+            width: 100%;
+            height: 65vh;
+            min-height: 500px;
+            background-color: #b8b8b8;
+            border-radius: 24px;
+        }
+
+        .radio-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 24px;
+            object-fit: cover;
+        }
+
+        @media (max-width: 900px) {
+            .title-wrapper { margin: 20px 0 30px 0; gap: 15px; }
+            .page-title { letter-spacing: -0.5px; }
+            .radio-container { padding: 0 20px; }
+            .radio-placeholder { border-radius: 16px; height: 50vh; min-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header-placeholder"></div>
+
+    <main>
+        <div class="title-wrapper">
+            <div class="play-shape"></div>
+            <h1 class="page-title">Noair Radio</h1>
+        </div>
+        <div class="radio-container">
+        
+                <img src="assets/gif/NOAIRRADIO.gif" alt="Noirlab Live Performance">
+            
+        </div>
+
+       
+    </main>
+
+    <script src="navbar.js"></script>
+</body>
+</html>

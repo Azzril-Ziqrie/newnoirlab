@@ -1,0 +1,10 @@
+config/config.php
+config/config-kasera.php
+config/logs/
+error_log
+*.sql
+!database/addons.sql
+cantum-studio.site/
+cgi-bin/
+.user.ini
+.well-known/

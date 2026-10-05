@@ -1,0 +1,25 @@
+RewriteEngine On
+
+# Redirect URL lama berakhiran .php ke versi bersih (hanya GET/HEAD supaya
+# POST form dan webhook Kasera tidak kehilangan data).
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteCond %{THE_REQUEST} \s/+[^\s?]*\.php[\s?]
+RewriteCond %{REQUEST_URI} ^(.*/)index\.php$
+RewriteRule ^ %1 [R=301,L]
+
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteCond %{THE_REQUEST} \s/+[^\s?]*\.php[\s?]
+RewriteCond %{REQUEST_URI} ^(.+)\.php$
+RewriteRule ^ %1 [R=301,L]
+
+# Menyembunyikan ekstensi .php
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [L]
+
+# Menyembunyikan ekstensi .html
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.*)$ $1.html [L]
