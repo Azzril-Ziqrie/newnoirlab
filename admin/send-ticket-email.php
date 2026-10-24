@@ -9,7 +9,21 @@ require_once dirname(__DIR__) . '/lib/PHPMailer/SMTP.php';
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/lib/addons.php';
 
+// Batas waktu PHP shared hosting sering 30 detik, sedangkan QR + dua percobaan SMTP bisa lebih lama.
+const MAIL_SCRIPT_TIME_LIMIT = 120;
+const SMTP_TIMEOUT_SECONDS   = 12;
+
 function sendTicketEmail($pdo, $orderId) {
+    try {
+        @set_time_limit(MAIL_SCRIPT_TIME_LIMIT);
+        return deliverTicketEmail($pdo, $orderId);
+    } catch (Throwable $e) {
+        recordEmailResult($pdo, (int) $orderId, false, $e->getMessage());
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+
+function deliverTicketEmail($pdo, $orderId) {
     $stmt = $pdo->prepare("
         SELECT o.*,
                e.title        AS event_title,
@@ -79,7 +93,7 @@ function sendTicketEmail($pdo, $orderId) {
             $mail->SMTPSecure  = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port        = MAIL_PORT;
             $mail->CharSet     = 'UTF-8';
-            $mail->Timeout     = 20;
+            $mail->Timeout     = SMTP_TIMEOUT_SECONDS;
 
             $mail->setFrom(MAIL_FROM, MAIL_FROMNAME);
             $mail->Sender = MAIL_FROM; // envelope sender sama dengan From (SPF alignment)
