@@ -1,16 +1,21 @@
+<?php require_once __DIR__ . '/lib/seo.php'; ob_start(); ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="assets/logos/logo-bona1.png">
-    <title>FAQ - Bonafest 2027</title>
+<?php renderHead([
+        'title'       => 'FAQ Bonafest 2026 | Tiket, Lokasi, dan Akses',
+        'description' => 'Jawaban pertanyaan soal Bonafest 2026: jadwal tiket, tanggal, lokasi di New Ciputri Bogor, cara menuju lokasi, camping, dan aksesibilitas.',
+        'path'        => 'faq',
+        'icon'        => 'assets/logos/logo-bona1.png',
+        'extraHead'   => '<!--FAQ_SCHEMA-->',
+    ]); ?>
     
     <!-- Memanggil Global CSS milikmu -->
-    <link rel="stylesheet" href="global.css">
+    <link rel="stylesheet" href="assets/css/global.css">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 
         /* Base & Reset */
         :root {
@@ -249,7 +254,7 @@
 </head>
 <body>
 
-    <?php include 'loader.php'; ?>
+    <?php include __DIR__ . '/loader.php'; ?>
 
     <div id="header-placeholder"></div>
 
@@ -438,7 +443,7 @@
         </div>
     </main>
 
-    <script src="navbar.js"></script>
+    <script src="assets/js/navbar.js"></script>
     <script>
         // Logika Akordion (Pop-up/Expand)
         const faqItems = document.querySelectorAll('.faq-item');
@@ -508,3 +513,7 @@
     </script>
 </body>
 </html>
+<?php
+$page = ob_get_clean();
+$faqSchema = seoFaqSchemaFromHtml($page);
+echo str_replace('<!--FAQ_SCHEMA-->', $faqSchema ? seoJsonLdTag($faqSchema) : '', $page);

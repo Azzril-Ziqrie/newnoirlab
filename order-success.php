@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/config.php';
 require_once 'lib/addons.php';
+require_once 'lib/seo.php';
 $pdo = getDBConnection();
 
 $code = trim($_GET['code'] ?? '');
@@ -23,8 +24,8 @@ if (!$order) { header("Location: index-event"); exit; }
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Confirmed — Noirlab</title>
-    <link rel="stylesheet" href="global.css">
+<?php renderHead(['title' => 'Order Confirmed | Noirlab Collective', 'path' => 'order-success', 'noindex' => true]); ?>
+    <link rel="stylesheet" href="assets/css/global.css">
     <style>
         body { background: #f5f5f5; }
 
@@ -222,6 +223,7 @@ if (!$order) { header("Location: index-event"); exit; }
     </style>
 </head>
 <body>
+    <?php include __DIR__ . '/loader.php'; ?>
 <div id="header-placeholder"></div>
 
 <div class="wrapper">
@@ -309,6 +311,6 @@ if (!$order) { header("Location: index-event"); exit; }
 
 </div>
 
-<script src="navbar.js"></script>
+<script src="assets/js/navbar.js"></script>
 </body>
 </html>

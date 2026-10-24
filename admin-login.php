@@ -1,10 +1,12 @@
 <?php
-session_start();
+require_once __DIR__ . '/lib/session.php';
+startSecureSession();
 if (isset($_SESSION['admin_logged_in'])) {
     header("Location: admin/"); exit;
 }
 
 require_once 'config/config.php';
+require_once 'lib/seo.php';
 $pdo = getDBConnection();
 
 $error = '';
@@ -18,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $admin = $stmt->fetch();
 
     if ($admin && password_verify($password, $admin['password'])) {
+        session_regenerate_id(true);
         $_SESSION['admin_logged_in'] = true;
         $_SESSION['admin_id']        = $admin['id'];
         $_SESSION['admin_name']      = $admin['name'];
@@ -32,12 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login — Noirlab</title>
+<?php renderHead(['title' => 'Admin Login | Noirlab Collective', 'path' => 'admin-login', 'noindex' => true]); ?>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-family: inherit;
             background-color: #ffffff;
             color: #000000;
             -webkit-font-smoothing: antialiased;
@@ -159,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <?php include __DIR__ . '/loader.php'; ?>
 
 <div class="login-wrap">
 
@@ -192,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
     </div>
 
-    <div class="login-note">Noirlab Admin — Akses terbatas</div>
+    <div class="login-note">Noirlab Admin - Akses terbatas</div>
 
 </div>
 

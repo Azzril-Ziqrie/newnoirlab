@@ -4,11 +4,12 @@
  * finishes on Kasera's hosted page, and it is also where direct payments (QRIS /
  * Virtual Account) are displayed, and where transaction creation is retried if
  * the checkout_url could not be created.
- * The ACTUAL ticket confirmation still happens in kasera-webhook.php — this page
+ * The ACTUAL ticket confirmation still happens in kasera-webhook.php - this page
  * only shows the status and, if needed, retries creating the transaction.
  */
 require_once 'config/config.php';
 require_once 'lib/kasera-client.php';
+require_once 'lib/seo.php';
 $pdo = getDBConnection();
 
 $code = trim((string)($_GET['code'] ?? ''));
@@ -89,8 +90,8 @@ if ($isAjax) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Noirlab Collective</title>
-    <link rel="stylesheet" href="global.css">
+<?php renderHead(['title' => 'Order Status | Noirlab Collective', 'path' => 'order-status', 'noindex' => true]); ?>
+    <link rel="stylesheet" href="assets/css/global.css">
     <style>
         body { background: #f5f5f5; }
         .wrapper { max-width: 560px; margin: 60px auto; padding: 0 24px 80px; }
@@ -169,6 +170,7 @@ if ($isAjax) {
     </style>
 </head>
 <body>
+    <?php include __DIR__ . '/loader.php'; ?>
 <div id="header-placeholder"></div>
 
 <?php
@@ -250,7 +252,7 @@ $steps     = $showPay && !empty($payInfo['instructions']['steps']) && is_array($
 
         <div class="pay-foot">
             <span class="pulse-dot"></span>
-            <span>Waiting for your payment — this page updates automatically. Order <span class="order-code"><?= htmlspecialchars($order['order_code']) ?></span></span>
+            <span>Waiting for your payment - this page updates automatically. Order <span class="order-code"><?= htmlspecialchars($order['order_code']) ?></span></span>
         </div>
     </div>
     <?php else: ?>

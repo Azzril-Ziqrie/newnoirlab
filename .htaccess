@@ -1,5 +1,22 @@
 RewriteEngine On
 
+# Berkas SEO dibuat dinamis dari PHP.
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteRule ^robots\.txt$ robots.php [L]
+RewriteRule ^llms\.txt$ llms.php [L]
+
+# Halaman lama sudah digabung ke landing page: arahkan ke bagian yang sesuai.
+RewriteCond %{REQUEST_URI} ^(.*/)[^/]+/?$
+RewriteRule ^program(\.html)?/?$        %1#program [R=301,NE,L]
+RewriteCond %{REQUEST_URI} ^(.*/)[^/]+/?$
+RewriteRule ^about(\.html)?/?$          %1#tentang [R=301,NE,L]
+RewriteCond %{REQUEST_URI} ^(.*/)[^/]+/?$
+RewriteRule ^noair-radio(\.html)?/?$    %1#program [R=301,NE,L]
+RewriteCond %{REQUEST_URI} ^(.*/)[^/]+/?$
+RewriteRule ^archive\.html$ %1archive [R=301,L]
+RewriteCond %{REQUEST_URI} ^(.*/)[^/]+/?$
+RewriteRule ^subsnoir-merch(\.html)?/?$ %1 [R=301,L]
+
 # Redirect URL lama berakhiran .php ke versi bersih (hanya GET/HEAD supaya
 # POST form dan webhook Kasera tidak kehilangan data).
 RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
@@ -23,3 +40,20 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME}.html -f
 RewriteRule ^(.*)$ $1.html [L]
+
+# Kompresi teks
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Cache aset statis di browser
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png  "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType video/mp4  "access plus 1 year"
+    ExpiresByType text/css   "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>

@@ -16,6 +16,48 @@ if (!$ev) { header("Location: ./"); exit; }
 $msg   = '';
 $error = '';
 
+// LINK HARGA SPESIAL
+require_once '../lib/promos.php';
+require_once '../lib/seo.php';
+ensurePromoTables($pdo);
+
+if (($_POST['action'] ?? '') === 'add_promo') {
+    $ticketId = (int) ($_POST['ticket_id'] ?? 0);
+    $price    = (int) ($_POST['promo_price'] ?? -1);
+    $maxUses  = trim((string) ($_POST['max_uses'] ?? ''));
+    $expires  = trim((string) ($_POST['expires_at'] ?? ''));
+    $label    = trim((string) ($_POST['label'] ?? ''));
+
+    $ownsTicket = $pdo->prepare('SELECT 1 FROM tickets WHERE id = ? AND event_id = ?');
+    $ownsTicket->execute([$ticketId, $eventId]);
+
+    if (!$ownsTicket->fetch()) {
+        $error = 'Pilih tier tiket yang valid.';
+    } elseif ($price < 0) {
+        $error = 'Harga spesial tidak boleh negatif.';
+    } else {
+        $pdo->prepare('INSERT INTO ticket_promos (ticket_id, code, label, price, max_uses, expires_at) VALUES (?,?,?,?,?,?)')
+            ->execute([
+                $ticketId,
+                generatePromoCode($pdo),
+                mb_substr($label, 0, 80),
+                $price,
+                $maxUses === '' ? null : max(1, (int) $maxUses),
+                $expires === '' ? null : date('Y-m-d H:i:s', strtotime($expires)),
+            ]);
+        $msg = 'Link harga spesial dibuat. Salin dari daftar di bawah.';
+    }
+}
+
+if (in_array($_POST['action'] ?? '', ['toggle_promo', 'delete_promo'], true)) {
+    $promoId = (int) ($_POST['promo_id'] ?? 0);
+    $sql = $_POST['action'] === 'toggle_promo'
+        ? 'UPDATE ticket_promos p JOIN tickets t ON t.id = p.ticket_id SET p.active = 1 - p.active WHERE p.id = ? AND t.event_id = ?'
+        : 'DELETE p FROM ticket_promos p JOIN tickets t ON t.id = p.ticket_id WHERE p.id = ? AND t.event_id = ?';
+    $pdo->prepare($sql)->execute([$promoId, $eventId]);
+    $msg = $_POST['action'] === 'toggle_promo' ? 'Status link diperbarui.' : 'Link dihapus.';
+}
+
 // TAMBAH TIER
 if (isset($_POST['action']) && $_POST['action'] === 'add') {
     $tier  = trim($_POST['tier_name']);
@@ -95,6 +137,14 @@ if (isset($_GET['msg']) && $_GET['msg'] === 'addon_deleted') $msg = 'Add-on berh
 $tickets = $pdo->prepare("SELECT * FROM tickets WHERE event_id=? ORDER BY price ASC");
 $tickets->execute([$eventId]);
 $tickets = $tickets->fetchAll();
+
+$promoStmt = $pdo->prepare("
+    SELECT p.*, t.tier_name, t.price AS regular_price
+    FROM ticket_promos p JOIN tickets t ON t.id = p.ticket_id
+    WHERE t.event_id = ? ORDER BY p.id DESC
+");
+$promoStmt->execute([$eventId]);
+$promos = $promoStmt->fetchAll();
 
 $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'")->fetchColumn();
 ?>
@@ -257,6 +307,15 @@ $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'
         .btn-primary { background: #000000; color: #ffffff; padding: 10px 20px; font-size: 0.8rem; }
         .btn-primary:hover { opacity: 0.7; background: #000000; }
         .btn-full { width: 100%; justify-content: center; }
+        .promo-help { font-size: 0.8rem; color: #555; line-height: 1.6; margin-bottom: 18px; }
+        .promo-item { border: 1px solid #e5e5e5; padding: 14px; margin-bottom: 12px; }
+        .promo-top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 0.875rem; }
+        .promo-top s { color: #888; margin-left: 6px; }
+        .promo-state { font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 1px; }
+        .promo-meta { font-size: 0.78rem; color: #666; margin-top: 4px; }
+        .promo-link { width: 100%; margin: 10px 0; padding: 8px 10px; border: 1px solid #e5e5e5; font-size: 0.75rem; }
+        .promo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .promo-form { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e5e5; }
         .btn-blue, .btn-red, .btn-green, .btn-ghost { border-color: #e5e5e5; color: rgba(0,0,0,0.6); background: #ffffff; }
         .btn-blue:hover, .btn-red:hover, .btn-green:hover, .btn-ghost:hover { background-color: #000000; color: #ffffff; border-color: #000000; }
 
@@ -465,6 +524,75 @@ $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'
                 </div>
                 <?php endif; ?>
             </div>
+
+            <!-- LINK HARGA SPESIAL -->
+            <div class="card">
+                <div class="card-title">Link Harga Spesial (<?= count($promos) ?>)</div>
+                <div class="card-body">
+                    <p class="promo-help">Buat link khusus supaya satu tier punya harga lain, misalnya REGULER Rp 185.000 menjadi Rp 150.000 untuk tiket "under web". Tanpa link ini, harga normal tetap berlaku.</p>
+
+                    <?php foreach ($promos as $p):
+                        $link = seoAbsoluteUrl(promoUrl($eventId, $p['code']));
+                        $expired = $p['expires_at'] && strtotime($p['expires_at']) < time();
+                        $full = $p['max_uses'] !== null && $p['used'] >= $p['max_uses'];
+                        $state = !$p['active'] ? 'Nonaktif' : ($expired ? 'Kedaluwarsa' : ($full ? 'Habis' : 'Aktif'));
+                    ?>
+                    <div class="promo-item">
+                        <div class="promo-top">
+                            <strong><?= htmlspecialchars($p['tier_name']) ?></strong>
+                            <span>Rp <?= number_format($p['price'], 0, ',', '.') ?> <s>Rp <?= number_format($p['regular_price'], 0, ',', '.') ?></s></span>
+                            <span class="promo-state"><?= $state ?></span>
+                        </div>
+                        <?php if ($p['label'] !== ''): ?><div class="promo-meta"><?= htmlspecialchars($p['label']) ?></div><?php endif; ?>
+                        <div class="promo-meta">
+                            Terpakai <?= (int) $p['used'] ?><?= $p['max_uses'] !== null ? ' / ' . (int) $p['max_uses'] : ' (tanpa batas)' ?>
+                            <?= $p['expires_at'] ? ' · sampai ' . htmlspecialchars($p['expires_at']) : '' ?>
+                        </div>
+                        <input class="promo-link" type="text" readonly value="<?= htmlspecialchars($link) ?>" onclick="this.select()">
+                        <div class="promo-actions">
+                            <button type="button" class="btn" data-link="<?= htmlspecialchars($link) ?>" onclick="copyPromoLink(this)">Salin link</button>
+                            <form method="POST" style="display:inline">
+                                <input type="hidden" name="action" value="toggle_promo">
+                                <input type="hidden" name="promo_id" value="<?= (int) $p['id'] ?>">
+                                <button type="submit" class="btn"><?= $p['active'] ? 'Nonaktifkan' : 'Aktifkan' ?></button>
+                            </form>
+                            <form method="POST" style="display:inline" onsubmit="return confirm('Hapus link ini?')">
+                                <input type="hidden" name="action" value="delete_promo">
+                                <input type="hidden" name="promo_id" value="<?= (int) $p['id'] ?>">
+                                <button type="submit" class="btn">Hapus</button>
+                            </form>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+
+                    <?php if ($tickets): ?>
+                    <form method="POST" class="promo-form">
+                        <input type="hidden" name="action" value="add_promo">
+
+                        <label>Tier *</label>
+                        <select name="ticket_id" required>
+                            <?php foreach ($tickets as $t): ?>
+                                <option value="<?= (int) $t['id'] ?>"><?= htmlspecialchars($t['tier_name']) ?> (Rp <?= number_format($t['price'], 0, ',', '.') ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+
+                        <label>Harga spesial (Rp) *</label>
+                        <input type="number" name="promo_price" placeholder="150000" min="0" required>
+
+                        <label>Catatan (opsional)</label>
+                        <input type="text" name="label" maxlength="80" placeholder="Contoh: Tiket under web">
+
+                        <label>Batas pemakaian (jumlah tiket, kosongkan = tanpa batas)</label>
+                        <input type="number" name="max_uses" min="1" placeholder="50">
+
+                        <label>Berlaku sampai (opsional)</label>
+                        <input type="datetime-local" name="expires_at">
+
+                        <button type="submit" class="btn btn-primary btn-full">+ Buat link</button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
 
         <!-- KANAN: info event + form tambah -->
@@ -521,6 +649,14 @@ $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'
 </div>
 
 <script>
+    function copyPromoLink(button) {
+        navigator.clipboard.writeText(button.dataset.link).then(() => {
+            const label = button.textContent;
+            button.textContent = 'Tersalin';
+            setTimeout(() => { button.textContent = label; }, 1500);
+        });
+    }
+
     const btn     = document.getElementById('hamburgerBtn');
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');

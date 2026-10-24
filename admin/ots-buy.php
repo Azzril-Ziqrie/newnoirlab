@@ -558,7 +558,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="form-group">
                         <label>Jumlah Tiket</label>
                         <input type="number" name="qty" id="qtyInput" min="1" max="10"
-                               value="<?= $_POST['qty'] ?? 1 ?>" required onchange="updatePrice()">
+                               value="<?= (int) ($_POST['qty'] ?? 1) ?>" required onchange="updatePrice()">
                     </div>
                 </div>
 

@@ -4,6 +4,8 @@ require_once 'config/config.php';
 require_once 'lib/kasera-client.php';
 require_once 'lib/addons.php';
 require_once 'lib/fees.php';
+require_once 'lib/seo.php';
+require_once 'lib/promos.php';
 $pdo = getDBConnection();
 
 $eventId  = (int)($_POST['event_id']  ?? 0);
@@ -24,6 +26,13 @@ $tk = $tkStmt->fetch();
 
 if (!$ev || !$tk) { header("Location: index-event"); exit; }
 
+// Link harga spesial: dicek ulang di server, tidak pernah dipercaya dari browser.
+$promoCode    = trim((string) ($_POST['promo'] ?? ''));
+$promo        = $promoCode !== '' ? findValidPromo($pdo, $promoCode, $eventId) : null;
+$tk           = withPromoPrice($tk, $promo);
+$promoApplied = !empty($tk['promo_applied']);
+$promoLost    = $promoCode !== '' && !$promoApplied;
+
 function generateOrderCode($pdo) {
     $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     do {
@@ -36,6 +45,9 @@ function generateOrderCode($pdo) {
 }
 
 $error = '';
+if ($promoLost) {
+    $error = 'This special price link is no longer valid or has run out. The regular price is shown below.';
+}
 
 // Total selalu dihitung ulang dari harga tiket di DB (jangan pernah percaya
 // nilai "total" dari form/browser).
@@ -70,6 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buyer_name'])) {
         $error = $payMethods[$payMethod]['label'] . ' is only available for totals between Rp '
                . number_format($payMethods[$payMethod]['min'], 0, ',', '.') . ' and Rp '
                . number_format($payMethods[$payMethod]['max'], 0, ',', '.') . '. Please choose another method.';
+    } elseif ($promoLost) {
+        $error = 'This special price link is no longer valid or has run out. The regular price is shown below, please review it and submit again.';
     } elseif ($tk['sold'] + $qty > $tk['quota']) {
         $error = 'Sorry, this ticket tier just sold out or not enough quota left.';
     } elseif (!$buyerName || !$buyerEmail) {
@@ -78,7 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buyer_name'])) {
         $error = 'Invalid email format.';
     } elseif (!checkdnsrr(substr(strrchr($buyerEmail, '@'), 1) . '.', 'MX') && !checkdnsrr(substr(strrchr($buyerEmail, '@'), 1) . '.', 'A')) {
         // Domain tidak punya mail server (mis. typo "gmial.com") -> tiket tidak akan pernah sampai.
-        $error = 'This email domain does not seem to exist. Please double-check your email address — your ticket will be sent there.';
+        $error = 'This email domain does not seem to exist. Please double-check your email address - your ticket will be sent there.';
+    } elseif ($promoApplied && !reservePromoUse($pdo, (int) $promo['id'], $qty)) {
+        $error = 'Sorry, the special price just ran out. Please go back and choose the regular ticket.';
     } else {
         try {
             $orderCode = generateOrderCode($pdo);
@@ -95,6 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buyer_name'])) {
             ]);
 
             $orderId = (int)$pdo->lastInsertId();
+
+            if ($promoApplied && ordersHavePromoColumn($pdo)) {
+                $pdo->prepare('UPDATE orders SET promo_code = ? WHERE id = ?')->execute([$promo['code'], $orderId]);
+            }
 
             $addonIns = $pdo->prepare("INSERT INTO order_addons (order_id, addon_id, name, price, qty) VALUES (?,?,?,?,?)");
             foreach ($selectedAddons as $ad) {
@@ -116,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buyer_name'])) {
                 exit;
             }
 
-            // Tidak ada checkout_url balik (seharusnya jarang terjadi) — lempar
+            // Tidak ada checkout_url balik (seharusnya jarang terjadi) - lempar
             // ke order-status.php, yang akan coba buat ulang transaksinya.
             header('Location: order-status?code=' . urlencode($orderCode));
             exit;
@@ -136,8 +156,8 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment — <?= htmlspecialchars($ev['title']) ?></title>
-    <link rel="stylesheet" href="global.css">
+<?php renderHead(['title' => 'Payment - ' . $ev['title'], 'path' => 'payment', 'noindex' => true]); ?>
+    <link rel="stylesheet" href="assets/css/global.css">
     <style>
         body { background: #f5f5f5; }
         .wrapper { max-width: 880px; margin: 0 auto; padding: 48px 24px 80px; }
@@ -209,7 +229,7 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
             background: #000; color: #fff; border-radius: 50%; font-size: 10px; line-height: 16px; text-align: center;
         }
 
-        /* QRIS — baris besar */
+        /* QRIS - baris besar */
         .pm-featured { padding: 18px 20px; align-items: center; gap: 16px; width: 100%; }
         .pm-qris-logo { width: 96px; height: 44px; flex-shrink: 0; border-right: 1px solid #e5e5e5; padding-right: 16px; display: flex; align-items: center; justify-content: center; }
         .pm-qris-logo img { max-width: 100%; max-height: 34px; object-fit: contain; display: block; }
@@ -269,6 +289,7 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
     </style>
 </head>
 <body>
+    <?php include __DIR__ . '/loader.php'; ?>
 
 <div id="header-placeholder"></div>
 
@@ -296,6 +317,7 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
         <input type="hidden" name="event_id"  value="<?= $eventId ?>">
         <input type="hidden" name="ticket_id" value="<?= $ticketId ?>">
         <input type="hidden" name="qty"       value="<?= $qty ?>">
+        <?php if ($promoApplied): ?><input type="hidden" name="promo" value="<?= htmlspecialchars($promo['code']) ?>"><?php endif; ?>
         <?php foreach ($selectedAddons as $ad): ?>
         <input type="hidden" name="addons[<?= $ad['id'] ?>]" value="<?= $ad['qty'] ?>">
         <?php endforeach; ?>
@@ -335,7 +357,7 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
                             </span>
                             <span>
                                 <span class="pm-title">QRIS <span class="pm-chip">Instant</span></span>
-                                <span class="pm-sub" style="display:block">Scan with any banking or e-wallet app — GoPay, OVO, DANA, ShopeePay, m-banking</span>
+                                <span class="pm-sub" style="display:block">Scan with any banking or e-wallet app - GoPay, OVO, DANA, ShopeePay, m-banking</span>
                             </span>
                         </span>
                     </label>
@@ -456,7 +478,7 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
     }
     document.querySelectorAll('input[name="pay_method"]').forEach(r => r.addEventListener('change', sync));
     sync();
-    // Tombol Back di browser mengembalikan halaman dari cache — reset status tombol.
+    // Tombol Back di browser mengembalikan halaman dari cache - reset status tombol.
     window.addEventListener('pageshow', e => {
         if (e.persisted) { document.getElementById('submitBtn').classList.remove('is-loading'); sync(); }
     });
@@ -469,6 +491,6 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
     });
 })();
 </script>
-<script src="navbar.js"></script>
+<script src="assets/js/navbar.js"></script>
 </body>
 </html>

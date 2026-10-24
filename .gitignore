@@ -8,3 +8,6 @@ cantum-studio.site/
 cgi-bin/
 .user.ini
 .well-known/
+config/config*.php
+*.zip
+!database/update-promo-reminder.sql

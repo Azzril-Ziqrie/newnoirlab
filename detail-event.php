@@ -2,6 +2,8 @@
 require_once 'config/config.php';
 require_once 'lib/addons.php';
 require_once 'lib/fees.php';
+require_once 'lib/seo.php';
+require_once 'lib/promos.php';
 $pdo = getDBConnection();
 
 $id = (int)($_GET['id'] ?? 0);
@@ -16,6 +18,17 @@ $ticketStmt = $pdo->prepare("SELECT * FROM tickets WHERE event_id = ? ORDER BY p
 $ticketStmt->execute([$id]);
 $tickets = $ticketStmt->fetchAll();
 
+// Link harga spesial (?promo=KODE). Harga akhir tetap diputuskan ulang di payment.php.
+$publicTickets = $tickets;   // harga normal, untuk schema SEO
+$promoCode     = trim((string) ($_GET['promo'] ?? ''));
+$promo         = $promoCode !== '' ? findValidPromo($pdo, $promoCode, $id) : null;
+$promoInvalid  = $promoCode !== '' && !$promo;
+$tickets       = array_map(fn(array $t) => withPromoPrice($t, $promo), $tickets);
+if ($promo) {
+    // Link spesial hanya menampilkan tiketnya sendiri, tier lain disembunyikan.
+    $tickets = array_values(array_filter($tickets, fn(array $t) => !empty($t['promo_applied'])));
+}
+
 $startTs      = strtotime($e['event_date_start']);
 $dayLabel     = date('l', $startTs);
 $dayNum       = date('j', $startTs);
@@ -23,11 +36,15 @@ $year         = date('Y', $startTs);
 $month        = date('F', $startTs);
 
 if (!empty($e['event_date_end']) && $e['event_date_end'] !== $e['event_date_start']) {
-    $dayNum .= '–' . date('j', strtotime($e['event_date_end']));
+    $dayNum .= '-' . date('j', strtotime($e['event_date_end']));
 }
 
 $dateFormatted = "$dayLabel, $dayNum $month $year";
 $isUpcoming    = $e['status'] === 'upcoming';
+$eventPath     = 'detail-event?id=' . $id;
+$eventSummary  = !empty($e['description'])
+    ? seoExcerpt($e['description'])
+    : "Tiket {$e['title']} di {$e['location']}, {$e['city']} pada $dateFormatted.";
 
 // Cek apakah semua tiket sold out
 $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carry && ($t['sold'] >= $t['quota']), true);
@@ -37,8 +54,15 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($e['title']) ?> — Noirlab Collective</title>
-    <link rel="stylesheet" href="global.css">
+<?php renderHead([
+        'title'       => $e['title'] . ' | Noirlab Collective',
+        'description' => $eventSummary,
+        'path'        => $eventPath,
+        'image'       => $e['image_url'] ?: null,
+        'noindex'     => $promoCode !== '',   // link spesial tidak boleh muncul di pencarian
+        'schemas'     => [seoEventSchema($e, $eventPath, $publicTickets)],
+    ]); ?>
+    <link rel="stylesheet" href="assets/css/global.css">
     <style>
         body { background: #ffffff; }
 
@@ -117,6 +141,10 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
         }
         .price-val { font-size: 16px; font-weight: 700; color: #000; }
         .price-per { font-size: 12px; font-weight: 400; color: #888; }
+        .price-was { font-size: 12px; font-weight: 400; color: #888; text-decoration: line-through; margin-right: 6px; }
+        .promo-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; background: #000; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        .promo-note { margin-bottom: 16px; padding: 12px 16px; border: 1px solid #000; font-size: 12px; line-height: 1.6; }
+        .promo-note.is-invalid { border-color: #c00000; color: #900000; }
         .sold-out-text {
             font-size: 10px; font-weight: 700; letter-spacing: 1.4px;
             text-transform: uppercase; color: #aaa;
@@ -224,6 +252,7 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
     </style>
 </head>
 <body>
+    <?php include __DIR__ . '/loader.php'; ?>
 
 <div id="header-placeholder"></div>
 
@@ -285,6 +314,12 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
             <?php if ($isUpcoming): ?>
                 <div class="section-heading">Tickets</div>
 
+                <?php if ($promo): ?>
+                    <div class="promo-note">Special price link applied<?= $promo['label'] !== '' ? ': ' . htmlspecialchars($promo['label']) : '' ?>.</div>
+                <?php elseif ($promoInvalid): ?>
+                    <div class="promo-note is-invalid">This special price link is no longer valid or has run out. Regular prices apply.</div>
+                <?php endif; ?>
+
                 <?php if (empty($tickets)): ?>
                     <p class="no-ticket-msg">Ticket information not yet available.</p>
 
@@ -295,15 +330,21 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
                     <?php foreach ($tickets as $t):
                         $isSoldOut = $t['sold'] >= $t['quota'];
                         $maxQty    = min(10, $t['quota'] - $t['sold']);
+                        if (!empty($t['promo_applied']) && promoRemaining($promo) !== null) {
+                            $maxQty = min($maxQty, promoRemaining($promo));
+                        }
                     ?>
                     <div class="ticket-block" data-ticket-block>
-                        <div class="ticket-tier-label"><?= htmlspecialchars($t['tier_name']) ?></div>
+                        <div class="ticket-tier-label"><?= htmlspecialchars($t['tier_name']) ?><?php if (!empty($t['promo_applied'])): ?><span class="promo-badge">Special price</span><?php endif; ?></div>
                         <div class="ticket-body">
                             <div>
                                 <div class="price-label">Price</div>
                                 <div class="price-val">
+                                    <?php if (!empty($t['promo_applied'])): ?>
+                                        <span class="price-was">Rp <?= number_format($t['regular_price'], 0, ',', '.') ?></span>
+                                    <?php endif; ?>
                                     Rp <?= number_format($t['price'], 0, ',', '.') ?>
-                                    <span class="price-per">/ person</span>
+                                    <span class="price-per">/ ticket</span>
                                 </div>
                             </div>
                             <?php if ($isSoldOut): ?>
@@ -315,7 +356,7 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
                                         data-tier="<?= htmlspecialchars($t['tier_name']) ?>"
                                         data-ticket-id="<?= (int)$t['id'] ?>"
                                         onchange="updateTotal(this)">
-                                    <option value="0">— Select qty —</option>
+                                    <option value="0">- Select qty -</option>
                                     <?php for ($q = 1; $q <= $maxQty; $q++): ?>
                                         <option value="<?= $q ?>">
                                             <?= $q ?> ticket<?= $q > 1 ? 's' : '' ?>
@@ -341,7 +382,7 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
                                         data-price="<?= (int)$ad['price'] ?>"
                                         data-addon-id="<?= (int)$ad['id'] ?>"
                                         onchange="updateTotal()">
-                                    <option value="0">— Select qty —</option>
+                                    <option value="0">- Select qty -</option>
                                     <?php for ($q = 1; $q <= 10; $q++): ?>
                                         <option value="<?= $q ?>">
                                             <?= $q ?> unit<?= $q > 1 ? 's' : '' ?>
@@ -426,16 +467,17 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
     <input type="hidden" name="event_id"   value="<?= (int)$e['id'] ?>">
     <input type="hidden" name="ticket_id"  id="cf-ticket-id">
     <input type="hidden" name="qty"        id="cf-qty">
+    <?php if ($promo): ?><input type="hidden" name="promo" value="<?= htmlspecialchars($promo['code']) ?>"><?php endif; ?>
     <input type="hidden" name="total"      id="cf-total">
 </form>
 
-<script src="navbar.js"></script>
+<script src="assets/js/navbar.js"></script>
 <script>
 function formatRupiah(num) {
     return 'Rp ' + num.toLocaleString('id-ID');
 }
 
-// Tampilan saja — server (payment.php) selalu menghitung ulang fee-nya sendiri.
+// Tampilan saja - server (payment.php) selalu menghitung ulang fee-nya sendiri.
 const ADMIN_FEE_RATE = <?= ADMIN_FEE_RATE ?>;
 function calcFee(subtotal) {
     return Math.round(subtotal * ADMIN_FEE_RATE);

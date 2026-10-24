@@ -1,0 +1,96 @@
+/* Gaya dasar halaman publik: dipakai index.php dan archive.php.
+   Header ada di global.css. */
+
+:root {
+    --bg: #ffffff;
+    --text: #0a0a0a;
+    --text-dim: #6b6b6b;
+    --line: #e6e6e6;
+    --ease: cubic-bezier(.25, .1, .25, 1);
+    --spring: cubic-bezier(.22, 1.1, .36, 1);
+    --page-width: 1200px;
+    --gutter: 24px;
+    --label-width: 200px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+    font-size: 12px;
+    line-height: 1.6;
+    background: var(--bg);
+    color: var(--text);
+}
+
+a { color: inherit; }
+section { scroll-margin-top: 80px; }
+:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+
+.page { width: 100%; max-width: var(--page-width); margin: 0 auto; padding: 0 var(--gutter); }
+
+.scroll-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: var(--text); transform: scaleX(0); transform-origin: 0 50%; z-index: 300; pointer-events: none; }
+
+.hero-title { font-size: clamp(28px, 7vw, 84px); line-height: .95; font-weight: 700; letter-spacing: -.06em; text-transform: uppercase; }
+
+/* Judul masuk per baris: naik dari balik garis, dengan jeda antarbaris. */
+.hero-title { position: relative; }
+.hero-title .line { display: block; overflow: hidden; padding-bottom: .06em; margin-bottom: -.06em; }
+.hero-title .ch { font-style: normal; }
+.hero-title .line > span { display: block; animation: title-rise 1s var(--spring) backwards; animation-delay: calc(var(--n, 0) * 110ms + var(--intro, 120ms)); }
+@keyframes title-rise { from { transform: translateY(110%); } }
+
+/* Muncul halus saat scroll */
+.rv { opacity: 0; transform: translateY(16px); transition: opacity .7s var(--ease), transform .9s var(--spring); }
+.rv.in { opacity: 1; transform: none; }
+
+footer { margin-top: 120px; padding: 28px 0 calc(28px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; color: var(--text-dim); }
+.foot nav { display: flex; gap: 24px; justify-content: flex-start; }
+.foot a { text-decoration: none; }
+.foot a:hover { color: var(--text); }
+.credit { display: inline-flex; flex-wrap: wrap; }
+.credit-sep { white-space: pre; }
+.credit a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; transition: color .2s, text-decoration-color .2s; }
+.credit a:hover { color: var(--text); text-decoration-color: currentColor; }
+
+/* Section: label di kiri, isi di kanan */
+.sec { display: grid; grid-template-columns: var(--label-width) 1fr; gap: 24px; padding-top: 96px; }
+.sec-label { position: sticky; top: 24px; align-self: start; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.sec-label small { display: block; margin-bottom: 4px; color: var(--text-dim); font-weight: 400; }
+
+/* Baris event */
+.event { display: grid; grid-template-columns: 110px 1fr 160px; gap: 24px; align-items: center; padding: 20px 0; border-top: 1px solid var(--line); text-decoration: none; transition: padding-left .4s var(--spring); }
+.event:last-of-type { border-bottom: 1px solid var(--line); }
+.event:hover { padding-left: 10px; }
+.event-date { font-weight: 700; text-transform: uppercase; }
+.event h3 { font-size: 14px; line-height: 1.3; }
+.event-meta { color: var(--text-dim); }
+.event-img { aspect-ratio: 16 / 10; background: #f2f2f2; overflow: hidden; }
+.event-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.event.past { color: var(--text-dim); }
+.event.past .event-img img { filter: grayscale(1); opacity: .75; }
+.empty { padding: 40px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--text-dim); }
+.empty b { display: block; color: var(--text); font-size: 14px; }
+.all-link { display: inline-block; margin-top: 20px; font-weight: 700; text-decoration: none; }
+.all-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+@media (max-width: 900px) {
+    :root { --gutter: 20px; }
+    footer { margin-top: 56px; padding: 18px 0 calc(18px + env(safe-area-inset-bottom)); font-size: 11px; }
+    .foot { flex-direction: column; gap: 8px; }
+    .foot nav { gap: 20px; }
+    .credit { flex-direction: column; gap: 2px; }
+    .credit-sep { display: none; }
+    .sec { grid-template-columns: 1fr; gap: 20px; padding-top: 72px; }
+    .sec-label { position: static; }
+    .event { grid-template-columns: 1fr; gap: 12px; }
+    .event-img { order: -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .rv { opacity: 1; transform: none; transition: none; }
+    .scroll-progress { display: none; }
+    .event { transition: none; }
+    .hero-title .line > span { animation: none; transform: none; }
+}

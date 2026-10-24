@@ -1,6 +1,7 @@
 <?php
 require_once 'auth.php';
 require_once '../config/config.php';
+require_once '../lib/sales.php';
 $pdo = getDBConnection();
 
 if (isset($_GET['logout'])) {
@@ -12,9 +13,19 @@ if (isset($_GET['logout'])) {
 $totalEvents   = $pdo->query("SELECT COUNT(*) FROM events")->fetchColumn();
 $upcomingCount = $pdo->query("SELECT COUNT(*) FROM events WHERE status='upcoming'")->fetchColumn();
 $pastCount     = $pdo->query("SELECT COUNT(*) FROM events WHERE status='past'")->fetchColumn();
-$totalTickets  = $pdo->query("SELECT COALESCE(SUM(sold),0) FROM tickets")->fetchColumn();
+$totalTickets  = $pdo->query("SELECT COALESCE(SUM(t.sold),0) FROM tickets t JOIN events e ON e.id = t.event_id WHERE e.status = 'upcoming'")->fetchColumn();
 $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'")->fetchColumn();
-$totalRevenue  = $pdo->query("SELECT COALESCE(SUM(total_price),0) FROM orders WHERE status='confirmed'")->fetchColumn();
+$totalRevenue  = $pdo->query("SELECT COALESCE(SUM(o.total_price),0) FROM " . ACTIVE_SALES_FROM . " WHERE " . ACTIVE_SALES_WHERE)->fetchColumn();
+
+$salesRange    = parseSalesRange($_GET['range'] ?? null);
+$sales         = buildSalesOverview($pdo, $salesRange);
+$salesMaxEvent = max(array_column($sales['byEvent'], 'revenue') ?: [0]) ?: 1;
+$rangeLabel    = SALES_RANGE_OPTIONS[$salesRange];
+
+function formatRupiah(int $amount): string
+{
+    return 'Rp ' . number_format($amount, 0, ',', '.');
+}
 
 $events = $pdo->query("
     SELECT e.*,
@@ -263,6 +274,141 @@ $events = $pdo->query("
             color: #000000;
         }
 
+        /* --- SALES OVERVIEW --- */
+        .sales { margin-bottom: 48px; }
+
+        .sales-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .sales-head h2 { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.2px; }
+
+        .range-tabs { display: flex; border: 1px solid #e5e5e5; }
+
+        .range-tabs a {
+            padding: 7px 14px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(0,0,0,0.45);
+            text-decoration: none;
+            border-right: 1px solid #e5e5e5;
+            transition: color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .range-tabs a:last-child { border-right: none; }
+        .range-tabs a:hover { color: #000000; }
+        .range-tabs a.active { background: #000000; color: #ffffff; }
+
+        .sales-kpis {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            border: 1px solid #e5e5e5;
+            border-bottom: none;
+        }
+
+        .sales-kpi { padding: 22px 24px; border-right: 1px solid #e5e5e5; }
+        .sales-kpi:last-child { border-right: none; }
+
+        .sales-kpi .stat-value { font-size: 1.5rem; }
+
+        .sales-kpi.hero .stat-value {
+            font-size: clamp(2rem, 4vw, 3rem);
+            letter-spacing: -1.5px;
+        }
+
+        .stat-delta {
+            margin-top: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(0,0,0,0.55);
+        }
+
+        .stat-delta.flat { font-weight: 400; color: rgba(0,0,0,0.4); }
+
+        .sales-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            border: 1px solid #e5e5e5;
+        }
+
+        .sales-panel { padding: 22px 24px; min-width: 0; }
+        .sales-panel + .sales-panel { border-left: 1px solid #e5e5e5; }
+
+        .panel-title {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: rgba(0,0,0,0.4);
+            margin-bottom: 16px;
+        }
+
+        .chart-host { position: relative; }
+        .chart-host svg { display: block; touch-action: pan-y; }
+
+        .chart-tooltip {
+            position: absolute;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 9px 12px;
+            background: #ffffff;
+            border: 1px solid #e5e5e5;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            font-size: 0.75rem;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .chart-tooltip[hidden] { display: none; }
+        .chart-tooltip strong { font-weight: 700; }
+        .chart-tooltip span { font-size: 0.95rem; font-weight: 700; }
+        .chart-tooltip small { color: rgba(0,0,0,0.45); font-size: 0.7rem; }
+
+        .chart-table { margin-top: 16px; font-size: 0.8rem; }
+        .chart-table summary { cursor: pointer; color: rgba(0,0,0,0.45); font-weight: 600; }
+        .chart-table summary:hover { color: #000000; }
+        .chart-table .table-scroll { max-height: 260px; overflow: auto; margin-top: 10px; border: 1px solid #e5e5e5; }
+        .chart-table table { min-width: 0; }
+        .chart-table th, .chart-table td { padding: 8px 14px; font-size: 0.75rem; }
+        .chart-table td:not(:first-child), .chart-table th:not(:first-child) { text-align: right; }
+        .chart-empty-note { padding: 16px; color: rgba(0,0,0,0.4); }
+
+        .event-bars { list-style: none; display: flex; flex-direction: column; gap: 18px; }
+
+        .event-bar-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+            font-size: 0.8rem;
+        }
+
+        .event-bar-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .event-bar-value { font-weight: 700; white-space: nowrap; }
+        .event-bar-meta { margin-top: 2px; font-size: 0.7rem; color: rgba(0,0,0,0.4); }
+
+        .event-bar-track { height: 8px; margin-top: 8px; background: #f1f1f1; }
+
+        .event-bar-fill {
+            height: 100%;
+            background: #000000;
+            border-radius: 0 4px 4px 0;
+            transform-origin: left;
+            animation: bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+        }
+
+        @keyframes bar-grow { from { transform: scaleX(0); } }
+
+        @media (prefers-reduced-motion: reduce) {
+            .event-bar-fill { animation: none; }
+        }
+
         /* --- PENDING ALERT --- */
         .pending-alert {
             display: flex;
@@ -455,6 +601,21 @@ $events = $pdo->query("
             .stat-card { border-bottom: 1px solid #e5e5e5; }
         }
 
+        @media (max-width: 1000px) {
+            .sales-kpis { grid-template-columns: 1fr 1fr; }
+            .sales-kpi.hero { grid-column: 1 / -1; border-right: none; border-bottom: 1px solid #e5e5e5; }
+            .sales-kpi:nth-child(3) { border-right: none; }
+            .sales-grid { grid-template-columns: 1fr; }
+            .sales-panel + .sales-panel { border-left: none; border-top: 1px solid #e5e5e5; }
+        }
+
+        @media (max-width: 600px) {
+            .sales-head { flex-direction: column; align-items: flex-start; }
+            .range-tabs { width: 100%; }
+            .range-tabs a { flex: 1; text-align: center; padding: 9px 4px; }
+            .sales-kpi, .sales-panel { padding: 18px 16px; }
+        }
+
         @media (max-width: 900px) {
             .stats { grid-template-columns: repeat(2, 1fr); }
 
@@ -560,7 +721,7 @@ $events = $pdo->query("
             <div class="stat-value"><?= $pastCount ?></div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Tiket Terjual</div>
+            <div class="stat-label">Tiket Berjalan</div>
             <div class="stat-value"><?= $totalTickets ?></div>
         </div>
         <div class="stat-card">
@@ -568,10 +729,80 @@ $events = $pdo->query("
             <div class="stat-value"><?= $pendingOrders ?></div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Revenue</div>
+            <div class="stat-label">Revenue Berjalan</div>
             <div class="stat-value" style="font-size:1.1rem">Rp <?= number_format($totalRevenue, 0, ',', '.') ?></div>
         </div>
     </div>
+
+    <!-- SALES OVERVIEW -->
+    <section class="sales" aria-labelledby="sales-title">
+        <div class="sales-head">
+            <h2 id="sales-title">Sales Overview</h2>
+            <nav class="range-tabs" aria-label="Periode penjualan">
+                <?php foreach (SALES_RANGE_OPTIONS as $days => $label): ?>
+                <a href="?range=<?= $days ?>" class="<?= $days === $salesRange ? 'active' : '' ?>"<?= $days === $salesRange ? ' aria-current="true"' : '' ?>><?= $label ?></a>
+                <?php endforeach; ?>
+            </nav>
+        </div>
+
+        <div class="sales-kpis">
+            <div class="sales-kpi hero">
+                <div class="stat-label">Pendapatan, <?= htmlspecialchars(strtolower($rangeLabel)) ?></div>
+                <div class="stat-value"><?= formatRupiah($sales['totals']['revenue']) ?></div>
+                <?php if ($sales['change'] !== null): ?>
+                <div class="stat-delta"><?= $sales['change'] >= 0 ? '▲ +' : '▼ ' ?><?= number_format($sales['change'], 1, ',', '.') ?>% dibanding <?= htmlspecialchars(strtolower($rangeLabel)) ?> sebelumnya</div>
+                <?php elseif ($salesRange !== SALES_RANGE_ALL): ?>
+                <div class="stat-delta flat">Belum ada pembanding dari periode sebelumnya</div>
+                <?php endif; ?>
+            </div>
+            <div class="sales-kpi">
+                <div class="stat-label">Tiket terjual</div>
+                <div class="stat-value"><?= number_format($sales['totals']['tickets'], 0, ',', '.') ?></div>
+            </div>
+            <div class="sales-kpi">
+                <div class="stat-label">Order</div>
+                <div class="stat-value"><?= number_format($sales['totals']['orders'], 0, ',', '.') ?></div>
+            </div>
+            <div class="sales-kpi">
+                <div class="stat-label">Rata-rata order</div>
+                <div class="stat-value" style="font-size:1.1rem"><?= formatRupiah($sales['average']) ?></div>
+            </div>
+        </div>
+
+        <div class="sales-grid">
+            <div class="sales-panel">
+                <div class="panel-title">Pendapatan harian</div>
+                <?php if ($sales['totals']['orders'] > 0): ?>
+                <div class="chart-host" id="sales-trend"><div class="chart-tooltip" hidden></div></div>
+                <details class="chart-table">
+                    <summary>Lihat sebagai tabel</summary>
+                    <div class="table-scroll" id="sales-table"></div>
+                </details>
+                <?php else: ?>
+                <div class="chart-empty-note">Belum ada penjualan di periode ini.</div>
+                <?php endif; ?>
+            </div>
+            <div class="sales-panel">
+                <div class="panel-title">Penjualan per event</div>
+                <?php if ($sales['byEvent']): ?>
+                <ul class="event-bars">
+                    <?php foreach ($sales['byEvent'] as $row): ?>
+                    <li>
+                        <div class="event-bar-top">
+                            <span class="event-bar-name"><?= htmlspecialchars($row['title']) ?></span>
+                            <span class="event-bar-value"><?= formatRupiah($row['revenue']) ?></span>
+                        </div>
+                        <div class="event-bar-meta"><?= number_format($row['tickets'], 0, ',', '.') ?> tiket</div>
+                        <div class="event-bar-track"><div class="event-bar-fill" style="width:<?= round($row['revenue'] / $salesMaxEvent * 100, 1) ?>%"></div></div>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+                <?php else: ?>
+                <div class="chart-empty-note">Belum ada penjualan di periode ini.</div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </section>
 
     <!-- PENDING ALERT -->
     <?php if ($pendingOrders > 0): ?>
@@ -666,6 +897,10 @@ $events = $pdo->query("
 
 </div>
 
+<?php if ($sales['totals']['orders'] > 0): ?>
+<script type="application/json" id="sales-data"><?= json_encode(['days' => $sales['days']], JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+<script src="../assets/js/admin-sales.js"></script>
+<?php endif; ?>
 <script>
     const btn     = document.getElementById('hamburgerBtn');
     const sidebar = document.getElementById('sidebar');

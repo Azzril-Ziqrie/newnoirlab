@@ -1,17 +1,86 @@
+<?php
+require_once __DIR__ . '/lib/seo.php';
+require_once __DIR__ . '/lib/events.php';
+require_once __DIR__ . '/lib/view.php';
+
+const BONAFEST_EVENT_ID  = 18;
+const BONAFEST_NAME      = "Bonafest '26";
+const BONAFEST_VENUE     = 'New Ciputri Bogor';
+const BONAFEST_ADDRESS   = 'Kp. Neglasari, RT 04/RW 06, Tapos I, Tenjolaya, Bogor Regency, West Java, Indonesia';
+const BONAFEST_SUMMARY   = "Bonafest '26 is a biennial music and art festival by Noirlab Collective, held 7-8 November 2026 at New Ciputri Bogor, West Java, Indonesia. Camping is available, and tickets are sold online.";
+const BONAFEST_ABOUT     = 'A biennial music and art festival initiated by Noirlab Collective since 2020, Bona Fest is a music and art laboratory focused on collaborative learning and sustainable projects for art practitioners.';
+
+$bonafest = fetchEventWithTickets(BONAFEST_EVENT_ID);
+$tickets  = $bonafest['tickets'] ?? [];
+$prices   = array_map(fn(array $t) => (int) $t['price'], $tickets);
+
+function bonafestSchema(?array $bonafest): array
+{
+    $base = [
+        '@type'               => 'Event',
+        '@id'                 => seoAbsoluteUrl('bonafest') . '#event',
+        'name'                => BONAFEST_NAME,
+        'alternateName'       => ['Bonafest 2026', 'Bona Fest 2026'],
+        'description'         => BONAFEST_SUMMARY . ' ' . BONAFEST_ABOUT,
+        'startDate'           => '2026-11-07',
+        'endDate'             => '2026-11-08',
+        'eventStatus'         => 'https://schema.org/EventScheduled',
+        'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+        'inLanguage'          => 'en',
+        'isAccessibleForFree' => false,
+        'url'                 => seoAbsoluteUrl('bonafest'),
+        'image'               => [seoAbsoluteUrl('assets/images/og.jpg'), seoAbsoluteUrl('assets/media/tiser.jpg')],
+        'location'            => [
+            '@type'   => 'Place',
+            'name'    => BONAFEST_VENUE,
+            'address' => [
+                '@type'           => 'PostalAddress',
+                'streetAddress'   => 'Kp. Neglasari, RT 04/RW 06, Tapos I, Tenjolaya',
+                'addressLocality' => 'Bogor Regency',
+                'addressRegion'   => 'West Java',
+                'addressCountry'  => 'ID',
+            ],
+        ],
+        'organizer'           => ['@id' => SITE_URL . '/#organization'],
+    ];
+    if (!$bonafest) {
+        return $base;
+    }
+    $fromDb = seoEventSchema($bonafest['event'], 'detail-event?id=' . BONAFEST_EVENT_ID, $bonafest['tickets']);
+    return $base + array_intersect_key($fromDb, ['offers' => true]);
+}
+
+$pageSchemas = [
+    seoOrganizationSchema(),
+    bonafestSchema($bonafest),
+    seoBreadcrumbSchema([['Noirlab Collective', ''], ['Bonafest', 'bonafest']]),
+    seoVideoSchema(
+        "Bonafest '26 teaser",
+        'Official teaser video for Bonafest 2026 by Noirlab Collective.',
+        'assets/media/tiser.jpg',
+        'assets/media/tiser.mp4'
+    ),
+];
+?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="assets/logos/logo-bona1.png">
-    <title>Bonafest - Noirlab Collective</title>
-    
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
-    </style>
+<?php renderHead([
+        'title'       => "Bonafest '26 | Music & Art Festival in Bogor, 7-8 November 2026",
+        'description' => "Bonafest '26 by Noirlab Collective: a biennial music and art festival on 7-8 November 2026 at New Ciputri Bogor, West Java. Camping, local artists, tickets online.",
+        'path'        => 'bonafest',
+        'image'       => 'assets/images/og.jpg',
+        'icon'        => 'assets/logos/logo-bona1.png',
+        'locale'      => 'en_US',
+        'type'        => 'website',
+        'geo'         => ['placename' => 'New Ciputri Bogor, Tenjolaya, Bogor Regency', 'position' => null],
+        'schemas'     => $pageSchemas,
+    ]); ?>
     
     <!-- Memanggil Global CSS milikmu -->
-    <link rel="stylesheet" href="global.css">
+    <link rel="stylesheet" href="assets/css/global.css">
     
     <style>
         /* Base & Reset */
@@ -167,6 +236,12 @@
         /* =========================================
            UBAHAN HANYA DI ABOUT SECTION 
            ========================================= */
+        .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        .facts { display: grid; grid-template-columns: 120px 1fr; gap: 12px 24px; text-align: left; }
+        .facts dt { font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+        .facts dd { color: var(--text-secondary); line-height: 1.8; }
+        .facts a { color: var(--text-primary); font-weight: 700; }
+        @media (max-width: 600px) { .facts { grid-template-columns: 1fr; gap: 4px; } .facts dd { margin-bottom: 12px; } }
         .about-section { width: 100%; max-width: 900px; padding: 0 24px; text-align: justify; margin-bottom: 80px; }
          .about-section h2 { font-size: 12px; font-weight: 700; margin-bottom: 24px; text-align: left; }
          .about-section p { font-size: 12px; line-height: 1.8; color: var(--text-secondary); text-align: justify; }
@@ -189,6 +264,16 @@
         .footer-bottom a { color: var(--text-secondary); text-decoration: none; font-size: 0.95rem; font-weight: 600; transition: color 0.2s; }
         .footer-bottom a:hover { color: var(--accent-color); }
         .footer-copy { font-size: 0.85rem; color: #999; text-align: center; }
+        .credit { display: inline-flex; flex-wrap: wrap; justify-content: center; }
+        .credit-sep { white-space: pre; }
+        .credit a { font-size: inherit; font-weight: inherit; color: #666; text-decoration: underline; text-decoration-color: #ccc; text-underline-offset: 3px; transition: color 0.2s, text-decoration-color 0.2s; }
+        .credit a:hover { color: var(--accent-color); text-decoration-color: currentColor; }
+        @media (max-width: 600px) {
+            footer { padding: 28px 20px calc(28px + env(safe-area-inset-bottom)); margin-top: 24px; }
+            .footer-copy { font-size: 0.75rem; }
+            .credit { flex-direction: column; align-items: center; gap: 2px; }
+            .credit-sep { display: none; }
+        }
 
         /* =========================================
            RESPONSIVE MOBILE
@@ -211,7 +296,7 @@
             .festival-header { margin: 24px 0 16px; }
             .festival-logo { max-width: 110px; }
             .media-container { margin-bottom: 32px; }
-            .menu-container { margin-bottom: 48px; top: 16px; }
+            .menu-container { margin-bottom: 48px; top: 76px; }
             .feature-menu-bar { justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
             .feature-menu-bar::-webkit-scrollbar { display: none; }
             .feature-menu-item { flex: 0 0 100px; padding: 16px 8px; }
@@ -223,7 +308,7 @@
 </head>
 <body>
 
-    <?php include 'loader.php'; ?>
+    <?php include __DIR__ . '/loader.php'; ?>
 
     <div id="intro-screen">
         <img src="assets/logos/logo-bona1.png" alt="Bonafest '26" class="intro-logo">
@@ -259,15 +344,15 @@
     <main>
         <div class="festival-header">
             <img src="assets/logos/logo-bona1.png" alt="Bonafest '26" class="festival-logo">
-            <div class="festival-info">
+            <h1 class="festival-info"><span class="sr-only">Bonafest '26, a music and art festival in Bogor.</span>
                 <span>NOVEMBER 7 SAT 8 SUN</span>
                 <span>BOGOR, WEST JAVA</span>
-            </div>
+            </h1>
         </div>
 
         <div class="media-container">
-            <video id="bonafest-video" autoplay muted loop playsinline>
-                                <source src="assets/video/tiser.mov" type="video/mp4">
+            <video id="bonafest-video" autoplay muted loop playsinline preload="metadata" poster="assets/media/tiser.jpg" aria-label="Bonafest '26 teaser video">
+                                <source src="assets/media/tiser.mp4" type="video/mp4">
             </video>
             
             <button id="mute-toggle" class="mute-btn" type="button" aria-label="Toggle mute">
@@ -291,20 +376,43 @@
             </div>
         </div>
 
+        <section class="about-section" id="info" aria-labelledby="facts-title">
+            <h2 id="facts-title">Bonafest '26 at a glance</h2>
+            <dl class="facts">
+                <dt>What</dt>
+                <dd>A biennial music and art festival by Noirlab Collective, running since 2020.</dd>
+                <dt>When</dt>
+                <dd><time datetime="2026-11-07">7</time>-<time datetime="2026-11-08">8 November 2026</time> (Saturday and Sunday).</dd>
+                <dt>Where</dt>
+                <dd><?= htmlspecialchars(BONAFEST_VENUE) ?>, <?= htmlspecialchars(BONAFEST_ADDRESS) ?></dd>
+                <dt>Tickets</dt>
+                <dd>
+                    <?php if ($prices): ?>
+                        From Rp <?= number_format(min($prices), 0, ',', '.') ?> to Rp <?= number_format(max($prices), 0, ',', '.') ?>.
+                    <?php endif; ?>
+                    <a href="detail-event?id=<?= BONAFEST_EVENT_ID ?>">Buy tickets</a>
+                </dd>
+                <dt>Camping</dt>
+                <dd>Allowed. One tent per group, up to 2x2 m. The camping area is about two minutes on foot from the car park.</dd>
+                <dt>More</dt>
+                <dd><a href="faq">Read the full FAQ</a> for directions, accessibility, and what not to bring.</dd>
+            </dl>
+        </section>
+
         <div class="about-section">
-            <h2></h2>
+            <h2>About Bonafest</h2>
             <p>A biennial music and art festival initiated by Noirlab Collective since 2020, Bona Fest is a music and art laboratory focused on collaborative learning and sustainable projects for art practitioners. We are committed to creating a space where creative practices grow organically and remain relevant to their surrounding context. More than just a celebration, the festival is a meeting point for relationships, ideas, and collective work that is open to various new possibilities. We invite you to step out of the city to celebrate togetherness in the beloved nature of Bogor, absorb local cultural rituals, and appreciate the finest narratives from local artists.</p>
         </div>
 
         <div class="marquee-wrapper">
                 <div class="marquee-track">
-                    <img src="assets/images/1.webp" alt="Bonafest Moment">
-                    <img src="assets/images/2.webp" alt="Bonafest Moment">
-                    <img src="assets/images/3.webp" alt="Bonafest Moment">
-                    <img src="assets/images/4.webp" alt="Bonafest Moment">
-                    <img src="assets/images/5.webp" alt="Bonafest Moment">
-                    <img src="assets/images/6.webp" alt="Bonafest Moment">
-                    <img src="assets/images/7.webp" alt="Bonafest Moment">
+                    <img src="assets/images/1.webp" alt="Bonafest festival moment 1" loading="lazy" decoding="async" width="340" height="240">
+                    <img src="assets/images/2.webp" alt="Bonafest festival moment 2" loading="lazy" decoding="async" width="340" height="240">
+                    <img src="assets/images/3.webp" alt="Bonafest festival moment 3" loading="lazy" decoding="async" width="340" height="240">
+                    <img src="assets/images/4.webp" alt="Bonafest festival moment 4" loading="lazy" decoding="async" width="340" height="240">
+                    <img src="assets/images/5.webp" alt="Bonafest festival moment 5" loading="lazy" decoding="async" width="340" height="240">
+                    <img src="assets/images/6.webp" alt="Bonafest festival moment 6" loading="lazy" decoding="async" width="340" height="240">
+                    <img src="assets/images/7.webp" alt="Bonafest festival moment 7" loading="lazy" decoding="async" width="340" height="240">
                 </div>
 
         </div>
@@ -316,11 +424,11 @@
 
     <footer>
         <div class="footer-bottom">
-            <div class="footer-copy">&copy; 2026 Noirlab Collective - Development by Cantum Studio</div>
+            <div class="footer-copy"><?= footerCredit() ?></div>
         </div>
     </footer>
 
-    <script src="navbar.js"></script>
+    <script src="assets/js/navbar.js"></script>
     <script>
         // ==========================================
         // LOGIKA COUNTDOWN TIMER
