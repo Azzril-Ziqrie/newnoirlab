@@ -391,7 +391,7 @@ $tglEvent       = date('j F Y', strtotime($ev['event_date_start']));
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
                         </svg>
-                        <span>Payments are processed securely by Kasera Pay. Your ticket is confirmed automatically and emailed to you once payment succeeds. Payment expires in 60 minutes.</span>
+                        <span>Payments are processed securely by Kasera Pay. Your ticket is confirmed automatically and emailed to you once payment succeeds (delivery: e-ticket sent by email on the day of payment). Payment expires in 60 minutes.</span>
                     </div>
                 </div>
 

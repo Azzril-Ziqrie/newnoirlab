@@ -215,6 +215,15 @@ function kaseraEnsureTransactionForOrder(PDO $pdo, array $order, ?string $method
         'expires_in_minutes' => 60,
     ];
 
+    // Sejak 26 Okt 2026 Kasera mewajibkan data pengiriman untuk pembayaran > Rp1.000.000
+    // (kalau kurang: HTTP 422 delivery_date_required / delivery_terms_not_shown).
+    // Tiket digital dikirim lewat email saat lunas, jadi tanggal pengiriman = hari ini (WIB).
+    // Ketentuan pengirimannya ditampilkan di payment.php.
+    if ((int)$order['total_price'] > 1000000) {
+        $payload['delivery_date']        = (new DateTime('now', new DateTimeZone('Asia/Jakarta')))->format('Y-m-d');
+        $payload['delivery_terms_shown'] = true;
+    }
+
     if ($direct) {
         // Direct API: metode sudah dipilih di halaman kita, jadi tidak perlu halaman checkout Kasera.
         unset($payload['checkout']);
