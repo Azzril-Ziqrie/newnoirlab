@@ -662,6 +662,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
                                  <?php if ($o['status'] === 'pending' && ($o['payment_provider'] ?? '') === 'kasera_pay'): ?>
                                  <span style="font-size:0.75rem;color:rgba(0,0,0,0.4)">Waiting payment (Kasera Pay)</span>
                                  <a href="?action=check_status&id=<?= $o['id'] ?>" class="btn">Check Status</a>
+                                 <a href="order-edit?id=<?= (int)$o['id'] ?>" class="btn">Edit Order</a>
                                  <?php elseif ($o['status'] === 'pending'): ?>
                                  <button class="btn btn-confirm"
                                          onclick='confirmAction("confirm", <?= (int)$o['id'] ?>, <?= htmlspecialchars(json_encode($o['buyer_name']), ENT_QUOTES) ?>)'>
@@ -673,6 +674,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
                                  </button>
                                  <?php elseif ($o['status'] === 'confirmed'): ?>
                                 <span style="font-size:0.75rem;color:rgba(0,0,0,0.4)">Confirmed</span>
+                                <a href="order-edit?id=<?= (int)$o['id'] ?>" class="btn">Edit Order</a>
                                 <a href="resend-email?q=<?= urlencode($o['order_code']) ?>" class="btn">Resend / Edit Email</a>
                                 <?php elseif ($o['status'] === 'rejected'): ?>
                                 <span style="font-size:0.75rem;color:rgba(0,0,0,0.3)">Rejected</span>
