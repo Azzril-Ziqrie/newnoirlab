@@ -8,6 +8,9 @@ $staticPages = [
     ['path' => '',            'priority' => '1.0', 'changefreq' => 'weekly'],
     ['path' => 'index-event', 'priority' => '0.9', 'changefreq' => 'weekly'],
     ['path' => 'bonafest',    'priority' => '0.8', 'changefreq' => 'weekly'],
+    ['path' => 'timetable',   'priority' => '0.6', 'changefreq' => 'weekly'],
+    ['path' => 'community',   'priority' => '0.6', 'changefreq' => 'weekly'],
+    ['path' => 'artist',      'priority' => '0.6', 'changefreq' => 'weekly'],
     ['path' => 'archive',     'priority' => '0.6', 'changefreq' => 'monthly'],
     ['path' => 'faq',         'priority' => '0.5', 'changefreq' => 'monthly'],
 ];

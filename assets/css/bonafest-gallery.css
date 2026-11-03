@@ -1,0 +1,47 @@
+/* Galeri Bonafest (artist, community): grid poster putih + bottom sheet. */
+.ar-hero { padding: 8px 0 32px; }
+.ar-hero h1 { font-size: clamp(2.5rem, 9vw, 5.5rem); font-weight: 800; line-height: 1; letter-spacing: -0.05em; text-transform: none; }
+.ar-hero p { margin-top: 14px; color: var(--text-secondary); letter-spacing: 0.02em; }
+
+.ar-cta { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; padding: 14px 24px; background: var(--accent-color); color: #fff; text-decoration: none; font-weight: 700; letter-spacing: -0.01em; border: 1px solid var(--accent-color); transition: background .2s, color .2s, transform .1s; }
+.ar-cta:hover { background: #fff; color: var(--accent-color); }
+.ar-cta:active { transform: scale(.97); }
+.ar-cta span { transition: transform .2s; } .ar-cta:hover span { transform: translateX(4px); }
+.ar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px 20px; align-items: start; padding-bottom: 48px; }
+.ar-card { position: relative; display: flex; flex-direction: column; justify-content: flex-start; border: 0; padding: 0; background: transparent; cursor: pointer; font: inherit; color: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+.ar-card img { width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: contain; display: block; background: #fff; transition: transform 500ms cubic-bezier(.2,.8,.2,1); }
+.ar-card:active img { transform: scale(.97); transition-duration: 100ms; }
+@media (hover: hover) { .ar-card:hover img { transform: translateY(-4px); } }
+.ar-label { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0 0; font-weight: 700; letter-spacing: -0.01em; }
+.ar-tag { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); white-space: nowrap; }
+.ar-card:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
+
+.js .ar-card { opacity: 0; transform: translateY(14px); transition: opacity 600ms ease, transform 700ms cubic-bezier(.2,.8,.2,1); transition-delay: calc(var(--n, 0) * 45ms); }
+.js .ar-card.in { opacity: 1; transform: none; }
+
+/* Sheet */
+.ar-scrim { position: fixed; inset: 0; z-index: 10001; background: rgba(0,0,0,.38); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); opacity: 0; visibility: hidden; }
+.ar-scrim.open { visibility: visible; }
+.ar-sheet { position: fixed; z-index: 10002; left: 50%; bottom: 0; width: min(520px, 100%); max-height: calc(100dvh - 48px); display: none; flex-direction: column; background: #fff; box-shadow: 0 -20px 60px rgba(0,0,0,.18); will-change: transform; margin-left: calc(min(520px, 100%) / -2); }
+.ar-sheet.open { display: flex; }
+.ar-bar { flex: none; touch-action: none; cursor: grab; user-select: none; background: rgba(255,255,255,.78); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); }
+.ar-bar:active { cursor: grabbing; }
+.ar-grab { width: 40px; height: 4px; background: #000; margin: 8px auto 0; }
+.ar-bar-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 8px 16px; }
+.ar-title { font-size: 14px; font-weight: 800; letter-spacing: -0.02em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-ctrls { display: flex; flex: none; }
+.ar-ctrls button { width: 40px; height: 40px; border: 0; background: transparent; font: inherit; font-size: 16px; cursor: pointer; transition: background .15s; }
+.ar-ctrls button:hover { background: #000; color: #fff; }
+.ar-body { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; transition: opacity 180ms ease; }
+.ar-body.swap { opacity: 0; }
+.ar-body img, .ar-body video { display: block; width: 100%; height: auto; }
+@media (max-width: 600px) { .ar-sheet { left: 0; margin-left: 0; width: 100%; } .ar-grid { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; } .ar-label { font-size: 11px; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .js .ar-card { opacity: 1; transform: none; transition: none; }
+    .ar-card img, .ar-label { transition: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .ar-bar { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .ar-scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0,0,0,.6); }
+}
