@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    # Situs noirlabcollective.com = root public_html. Hanya menyalin (tidak menghapus),
+    # jadi folder situs lain di public_html dan file server (.htaccess, config/) tidak tersentuh.
+    - export DEPLOYPATH=$HOME/public_html/
+    - /bin/cp -R admin assets lib cron $DEPLOYPATH
+    - /bin/cp *.php soon.html $DEPLOYPATH
