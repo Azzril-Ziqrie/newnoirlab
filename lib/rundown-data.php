@@ -1,6 +1,6 @@
 <?php
 /**
- * Rundown Bonafest '26, diambil dari RUNDOWN BONAFEST 2026.xlsx.
+ * Rundown Bonafest '26, diambil dari RUNDOWN BONAFEST 2026 (1).xlsx (versi fix).
  * Format baris: [mulai, selesai, judul, area]. Urut menurut jam mulai.
  * Baris internal produksi (check sound, changeover, playback, clear area, off) tidak dimuat.
  */
@@ -22,6 +22,7 @@ return [
         ['22:45', '23:45', 'RAIN TEMPO', 'Beledag Stage'],
         ['22:45', '23:45', 'NOBAR FILM SUKAJAYAMELAWAN', 'Community Lounge'],
         ['23:45', '00:45', 'HI(GH)HAT', 'Beledag Stage'],
+        ['23:45', '00:15', 'NOBAR FILM KOALISI SENI', 'Community Lounge'],
         ['00:45', '02:00', 'VERDY ARIEN', 'Beledag Stage'],
     ],
     'day2' => [
