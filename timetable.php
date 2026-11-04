@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/lib/seo.php';
 require_once __DIR__ . '/lib/view.php';
+require_once __DIR__ . '/lib/bonafest.php';
 
 $rundown = require __DIR__ . '/lib/rundown-data.php';
 $days = [
@@ -22,7 +23,8 @@ $areas = ['Bona Stage', 'Beledag Stage', 'Community Lounge'];
     'icon'        => 'assets/logos/logo-bona1.png',
     'locale'      => 'en_US',
     'type'        => 'website',
-    'schemas'     => [seoOrganizationSchema(), seoBreadcrumbSchema([['Noirlab Collective', ''], ['Bonafest', 'bonafest'], ['Time Table', 'timetable']])],
+    'geo'         => bonafestGeo(),
+    'schemas'     => [...bonafestBaseSchemas('Time Table', 'timetable'), bonafestTimetableSchema($rundown)],
 ]); ?>
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/bonafest-pages.css">

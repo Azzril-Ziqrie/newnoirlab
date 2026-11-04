@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/lib/seo.php';
 require_once __DIR__ . '/lib/events.php';
+require_once __DIR__ . '/lib/bonafest.php';
 
 header('Content-Type: text/plain; charset=UTF-8');
 
@@ -30,12 +31,55 @@ $pages = [
     ['Beranda', '', 'Tentang Noirlab, program, dan event mendatang'],
     ['Event', 'index-event', 'Jadwal event dan penjualan tiket'],
     ['Bonafest', 'bonafest', 'Festival musik dan seni Bonafest'],
+    ['Time Table Bonafest', 'timetable', 'Jadwal tampil per hari dan area (Bona Stage, Beledag Stage, Community Lounge)'],
+    ['Artist Bonafest', 'artist', 'Daftar artis Bonafest \'26 beserta poster dan video'],
+    ['Community Bonafest', 'community', 'Komunitas dan workshop di Community Lounge'],
+    ['Akses Bonafest', 'access', 'Cara menuju New Ciputri Bogor: kendaraan umum dan pribadi'],
     ['FAQ Bonafest', 'faq', 'Tiket, lokasi, akses menuju venue, camping, aksesibilitas'],
     ['Arsip', 'archive', 'Dokumentasi foto'],
 ];
 foreach ($pages as [$name, $path, $note]) {
     echo "- [$name](" . seoAbsoluteUrl($path) . "): $note\n";
 }
+
+// Isi halaman Bonafest dibaca dari berkas data yang sama dengan halamannya, jadi tidak pernah berbeda.
+$artists     = require __DIR__ . '/lib/artists-data.php';
+$communities = require __DIR__ . '/lib/community-data.php';
+$rundown     = require __DIR__ . '/lib/rundown-data.php';
+$routes      = require __DIR__ . '/lib/access-data.php';
+
+echo "\n## Lineup Bonafest '26 (" . count($artists) . " artis)\n";
+echo implode(', ', array_column($artists, 0)) . "\n";
+echo '- Detail: ' . seoAbsoluteUrl('artist') . "\n";
+
+echo "\n## Komunitas di Community Lounge\n";
+foreach ($communities as [$name, $tag]) {
+    echo "- $name: $tag\n";
+}
+
+echo "\n## Time table Bonafest '26 (waktu WIB)\n";
+$dayLabels = ['day1' => 'Hari 1, Sabtu 7 November 2026', 'day2' => 'Hari 2, Minggu 8 November 2026'];
+foreach ($rundown as $day => $rows) {
+    echo '### ' . $dayLabels[$day] . "\n";
+    foreach ($rows as [$start, $end, $title, $area]) {
+        echo "- $start-$end: $title ($area)\n";
+    }
+}
+echo '- Halaman: ' . seoAbsoluteUrl('timetable') . "\n";
+
+echo "\n## Akses menuju New Ciputri Bogor\n";
+echo '- Alamat: ' . BONAFEST_ADDRESS . "\n";
+echo '- Peta: ' . ACCESS_MAPS . "\n";
+foreach ($routes as $route) {
+    echo '### ' . $route['label'] . ': ' . $route['summary'] . "\n";
+    foreach ($route['steps'] as $i => [$a, $b]) {
+        echo '- ' . ($i + 1) . ". $a: $b\n";
+    }
+    foreach ($route['times'] as [$what, $time, $dist]) {
+        echo "- Estimasi $what: $time, $dist (Google Maps dari Kota Bogor)\n";
+    }
+}
+echo '- Halaman: ' . seoAbsoluteUrl('access') . "\n";
 
 $upcoming = fetchEvents('upcoming', 10);
 if ($upcoming) {

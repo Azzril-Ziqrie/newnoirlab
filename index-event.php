@@ -8,9 +8,9 @@ const EVENT_LIST_LIMIT = 50;
 $upcomingEvents = fetchEvents('upcoming', EVENT_LIST_LIMIT);
 $pastEvents     = fetchEvents('past', EVENT_LIST_LIMIT);
 
-$pageSchemas = array_map(
-    fn(array $event) => seoEventSchema($event, 'detail-event?id=' . $event['id']),
-    $upcomingEvents
+$pageSchemas = array_merge(
+    [seoBreadcrumbSchema([['Noirlab Collective', ''], ['Event', 'index-event']])],
+    array_map(fn(array $event) => seoEventSchema($event, 'detail-event?id=' . $event['id']), $upcomingEvents)
 );
 ?>
 <!DOCTYPE html>

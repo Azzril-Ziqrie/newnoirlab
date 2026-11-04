@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/lib/seo.php'; ob_start(); ?>
+<?php require_once __DIR__ . '/lib/seo.php'; require_once __DIR__ . '/lib/bonafest.php'; ob_start(); ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -9,6 +9,8 @@
         'description' => 'Jawaban pertanyaan soal Bonafest 2026: jadwal tiket, tanggal, lokasi di New Ciputri Bogor, cara menuju lokasi, camping, dan aksesibilitas.',
         'path'        => 'faq',
         'icon'        => 'assets/logos/logo-bona1.png',
+        'geo'         => bonafestGeo(),
+        'schemas'     => [seoBreadcrumbSchema([['Noirlab Collective', ''], ['Bonafest', 'bonafest'], ['FAQ', 'faq']])],
         'extraHead'   => '<!--FAQ_SCHEMA-->',
     ]); ?>
     

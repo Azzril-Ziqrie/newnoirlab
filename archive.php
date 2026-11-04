@@ -23,6 +23,21 @@ $photos = listArchivePhotos();
         'title'       => 'Arsip Foto | Noirlab Collective',
         'description' => 'Dokumentasi foto pertunjukan dan kegiatan Noirlab Collective di Bogor.',
         'path'        => 'archive',
+        'schemas'     => [
+            seoBreadcrumbSchema([['Noirlab Collective', ''], ['Arsip', 'archive']]),
+            [
+                '@type'      => 'ImageGallery',
+                'name'       => 'Arsip Foto Noirlab Collective',
+                'url'        => seoAbsoluteUrl('archive'),
+                'inLanguage' => 'id',
+                'publisher'  => ['@id' => SITE_URL . '/#organization'],
+                'image'      => array_map(fn(string $p) => [
+                    '@type'        => 'ImageObject',
+                    'contentUrl'   => seoAbsoluteUrl(ARCHIVE_DIR . '/full/' . $p),
+                    'thumbnailUrl' => seoAbsoluteUrl(ARCHIVE_DIR . '/thumb/' . $p),
+                ], array_slice($photos, 0, 60)),
+            ],
+        ],
     ]); ?>
     <link rel="stylesheet" href="assets/css/global.css">
     <link rel="stylesheet" href="assets/css/site.css">

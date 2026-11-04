@@ -1,0 +1,84 @@
+/* Halaman Access: kotak tegas tanpa radius, selaras dengan Time Table. */
+.ac-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+
+/* Venue */
+.ac-venue { display: flex; gap: 24px; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;
+            border: 1px solid var(--border-color); padding: 24px; margin-bottom: 24px; }
+.ac-venue-name { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin: 8px 0 10px; text-transform: uppercase; }
+.ac-venue address { font-style: normal; color: var(--text-secondary); line-height: 1.7; max-width: 560px; }
+.ac-venue-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ac-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border: 1px solid var(--accent-color);
+          background: #fff; color: var(--accent-color); font: 700 12px/1 'JetBrains Mono', monospace; letter-spacing: .04em; text-transform: uppercase;
+          text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color .15s, color .15s, transform .1s; }
+.ac-btn:hover { background: var(--accent-color); color: #fff; }
+.ac-btn-solid { background: var(--accent-color); color: #fff; }
+.ac-btn-solid:hover { background: #2b2b2b; }
+.ac-btn:active, .ac-seg-btn:active, .ac-step-btn:active { transform: scale(.98); }
+.ac-btn:focus-visible, .ac-seg-btn:focus-visible, .ac-step-btn:focus-visible, .ac-reset:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+/* Segmented control: thumb hitam digerakkan pegas dari JS (bisa diinterupsi di tengah jalan) */
+.ac-seg { position: relative; display: flex; border: 1px solid var(--border-color); margin-bottom: 24px; isolation: isolate; }
+.ac-thumb { position: absolute; z-index: -1; top: 0; bottom: 0; left: 0; width: 50%; background: var(--accent-color); will-change: transform, width; }
+.ac-seg-btn { flex: 1 1 0; min-height: 52px; padding: 0 12px; background: transparent; border: 0; font: 700 12px/1 'JetBrains Mono', monospace;
+              letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); cursor: pointer; transition: color .2s, transform .1s; }
+.ac-seg-btn:hover { color: var(--accent-color); }
+.ac-seg-btn[aria-selected="true"] { color: #fff; }
+
+/* Panel */
+.ac-panel[hidden] { display: none; }
+.ac-panel { animation: ac-in .38s cubic-bezier(.32,.72,0,1) both; }
+@keyframes ac-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.ac-summary { font-weight: 700; margin-bottom: 16px; letter-spacing: .02em; }
+
+.ac-times { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid var(--border-color); margin-bottom: 24px; }
+.ac-time { padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--border-color); }
+.ac-time:last-child { border-right: 0; }
+.ac-time b { font-size: 1.7rem; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.ac-dist { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* Progress */
+.ac-progress { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.ac-progress-bar { flex: 1; height: 2px; background: var(--border-color); overflow: hidden; }
+.ac-progress-bar i { display: block; height: 100%; width: 100%; background: var(--accent-color); transform: scaleX(0); transform-origin: left; will-change: transform; }
+.ac-progress-text { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ac-reset { background: none; border: 0; font: 700 11px 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--text-primary); padding: 8px 0; }
+
+/* Langkah: setiap baris tiga kotak (nomor | cara | tujuan) */
+.ac-steps { list-style: none; border: 1px solid var(--border-color); border-bottom: 0; }
+.ac-step { border-bottom: 1px solid var(--border-color); }
+.ac-step-btn { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.2fr); width: 100%; text-align: left; background: #fff; border: 0;
+               font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color .2s, transform .1s; }
+.ac-step-btn:hover { background: rgba(0,0,0,.03); }
+.ac-num, .ac-how, .ac-to { padding: 20px 16px; display: flex; align-items: center; }
+.ac-num { justify-content: center; position: relative; border-right: 1px solid var(--border-color); font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; transition: background-color .25s, color .25s; }
+.ac-num svg { position: absolute; width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+              stroke-dasharray: 24; stroke-dashoffset: 24; transition: stroke-dashoffset .35s cubic-bezier(.32,.72,0,1); }
+.ac-how { border-right: 1px solid var(--border-color); color: var(--text-secondary); gap: 10px; line-height: 1.4; }
+.ac-to { font-weight: 700; text-transform: uppercase; letter-spacing: .3px; line-height: 1.35; }
+.ac-swatch { flex: none; width: 10px; height: 10px; background: var(--c); }
+.ac-last .ac-to { background: #fafafa; }
+
+.ac-step-btn[aria-pressed="true"] .ac-num { background: var(--accent-color); color: transparent; }
+.ac-step-btn[aria-pressed="true"] .ac-num svg { stroke-dashoffset: 0; }
+.ac-step-btn[aria-pressed="true"] .ac-how, .ac-step-btn[aria-pressed="true"] .ac-to { color: rgba(0,0,0,.35); }
+.ac-step-btn[aria-pressed="true"] .ac-to { text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* Masuk bertahap saat di-scroll */
+.js .ac-step { opacity: 0; transform: translateY(10px); }
+.js .ac-step.in { opacity: 1; transform: none; transition: opacity .45s ease, transform .5s cubic-bezier(.32,.72,0,1); transition-delay: calc(var(--i) * 45ms); }
+
+@media (max-width: 600px) {
+    .ac-venue { padding: 18px 16px; } .ac-venue-actions { width: 100%; } .ac-venue-actions .ac-btn { flex: 1 1 0; }
+    .ac-venue-name { font-size: 1.15rem; }
+    .ac-times { grid-template-columns: 1fr; } .ac-time { border-right: 0; border-bottom: 1px solid var(--border-color); } .ac-time:last-child { border-bottom: 0; }
+    .ac-step-btn { grid-template-columns: 52px 1fr; }
+    .ac-num { grid-row: span 2; align-items: flex-start; padding-top: 22px; }
+    .ac-how { border-right: 0; padding: 16px 16px 0; }
+    .ac-to { padding: 4px 16px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ac-panel { animation: none; }
+    .js .ac-step, .js .ac-step.in { opacity: 1; transform: none; transition: none; }
+    .ac-num svg { transition: none; }
+}

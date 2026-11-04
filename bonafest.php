@@ -3,12 +3,7 @@ require_once __DIR__ . '/lib/seo.php';
 require_once __DIR__ . '/lib/events.php';
 require_once __DIR__ . '/lib/view.php';
 
-const BONAFEST_EVENT_ID  = 18;
-const BONAFEST_NAME      = "Bonafest '26";
-const BONAFEST_VENUE     = 'New Ciputri Bogor';
-const BONAFEST_ADDRESS   = 'Kp. Neglasari, RT 04/RW 06, Tapos I, Tenjolaya, Bogor Regency, West Java, Indonesia';
-const BONAFEST_SUMMARY   = "Bonafest '26 is a biennial music and art festival by Noirlab Collective, held 7-8 November 2026 at New Ciputri Bogor, West Java, Indonesia. Camping is available, and tickets are sold online.";
-const BONAFEST_ABOUT     = 'A biennial music and art festival initiated by Noirlab Collective since 2020, Bona Fest is a music and art laboratory focused on collaborative learning and sustainable projects for art practitioners.';
+require_once __DIR__ . '/lib/bonafest.php';
 
 $bonafest = fetchEventWithTickets(BONAFEST_EVENT_ID);
 $tickets  = $bonafest['tickets'] ?? [];
@@ -18,7 +13,7 @@ function bonafestSchema(?array $bonafest): array
 {
     $base = [
         '@type'               => 'Event',
-        '@id'                 => seoAbsoluteUrl('bonafest') . '#event',
+        '@id'                 => bonafestEventId(),
         'name'                => BONAFEST_NAME,
         'alternateName'       => ['Bonafest 2026', 'Bona Fest 2026'],
         'description'         => BONAFEST_SUMMARY . ' ' . BONAFEST_ABOUT,
@@ -42,6 +37,7 @@ function bonafestSchema(?array $bonafest): array
             ],
         ],
         'organizer'           => ['@id' => SITE_URL . '/#organization'],
+        'performer'           => array_map(fn(array $a) => ['@type' => 'PerformingGroup', 'name' => $a[0]], require __DIR__ . '/lib/artists-data.php'),
     ];
     if (!$bonafest) {
         return $base;
@@ -75,7 +71,7 @@ $pageSchemas = [
         'icon'        => 'assets/logos/logo-bona1.png',
         'locale'      => 'en_US',
         'type'        => 'website',
-        'geo'         => ['placename' => 'New Ciputri Bogor, Tenjolaya, Bogor Regency', 'position' => null],
+        'geo'         => bonafestGeo(),
         'schemas'     => $pageSchemas,
     ]); ?>
     
@@ -372,7 +368,7 @@ $pageSchemas = [
                  <a href="artist" class="feature-menu-item"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5M8.5 21.5h7"></path></svg><span>Artist</span></a>
                  <a href="community" class="feature-menu-item"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.2" r="2"></circle><ellipse cx="12" cy="11.2" rx="2.2" ry="2.6"></ellipse><ellipse cx="12" cy="18" rx="3" ry="3.6"></ellipse><path d="M11 3.6 9 1.8M13 3.6l2-1.8M9.9 10 5 8M9.8 11.3 3.8 12.2M10 13l-4 4M14.1 10l4.9-2M14.2 11.3l6 .9M14 13l4 4"></path></svg><span>Community</span></a>
                  <a href="soon.html" class="feature-menu-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v3.2a1.9 1.9 0 0 0 0 3.6V17H3v-3.2a1.9 1.9 0 0 0 0-3.6z"></path><path d="M15 7v2M15 11v2M15 15v2"></path><path d="M7.5 12h4"></path></svg><span>Tickets</span></a>
-                 <a href="soon.html" class="feature-menu-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5h16a1 1 0 0 1 1 1V16H3V5.5a1 1 0 0 1 1-1z"></path><path d="M3 10.5h18M12 4.5v6"></path><circle cx="7.5" cy="18.8" r="1.7"></circle><circle cx="16.5" cy="18.8" r="1.7"></circle></svg><span>Access</span></a>
+                 <a href="access" class="feature-menu-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.5h16a1 1 0 0 1 1 1V16H3V5.5a1 1 0 0 1 1-1z"></path><path d="M3 10.5h18M12 4.5v6"></path><circle cx="7.5" cy="18.8" r="1.7"></circle><circle cx="16.5" cy="18.8" r="1.7"></circle></svg><span>Access</span></a>
 
             </div>
         </div>
