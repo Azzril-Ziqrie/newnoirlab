@@ -170,7 +170,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
         <div class="table-responsive">
             <table class="table-cards">
                 <thead>
-                    <tr><th>Code</th><th>Buyer</th><th>Event</th><th>Email</th><th>Last send</th><th>Action</th></tr>
+                    <tr><th>Code</th><th>Buyer</th><th class="col-event">Event</th><th>Email</th><th>Last send</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($orders as $o): $fid = 'f' . (int)$o['id']; ?>

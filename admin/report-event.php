@@ -59,56 +59,327 @@ if ($selectedId) {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $orders = $stmt->fetchAll();
+
+    // Add-on per order (tenda, dll) — satu query untuk semua order; dipakai tabel dan export
+    $addonsByOrder = [];
+    if ($orders) {
+        try {
+            $ids = implode(',', array_map('intval', array_column($orders, 'id')));
+            foreach ($pdo->query("SELECT order_id, name, price, qty FROM order_addons WHERE order_id IN ($ids) ORDER BY id") as $a) {
+                $addonsByOrder[$a['order_id']][] = $a;
+            }
+        } catch (Throwable $e) { /* tabel add-on belum ada → abaikan */ }
+    }
 }
 
-// EXPORT CSV
-if (isset($_GET['export']) && $_GET['export'] === 'csv' && $selectedId && $selectedEvent) {
-    $filename = 'laporan-' . preg_replace('/[^a-zA-Z0-9]/', '-', $selectedEvent['title']) . '-' . date('Ymd') . '.csv';
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-    $out = fopen('php://output', 'w');
-    fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+/** Nomor HP → format internasional untuk wa.me (08xx → 628xx). null bila tidak valid. */
+function waNumber(?string $phone): ?string
+{
+    $d = preg_replace('/\D+/', '', (string) $phone);
+    if ($d === '') return null;
+    if (strncmp($d, '62', 2) === 0)      { /* sudah internasional */ }
+    elseif (strncmp($d, '0', 1) === 0)   { $d = '62' . substr($d, 1); }
+    elseif (strncmp($d, '8', 1) === 0)   { $d = '62' . $d; }
+    return strlen($d) >= 10 && strlen($d) <= 15 ? $d : null;
+}
 
-    fputcsv($out, ['No','Kode Tiket','Nama','Email','No HP','Tier','Qty','Total (Rp)','Metode Bayar','Status','Tanggal Beli','Waktu Masuk']);
+/** Pesan konfirmasi data tiket untuk dikirim lewat WhatsApp. */
+function waConfirmText(array $o, array $addons, string $eventTitle): string
+{
+    $lines = ['Halo ' . trim($o['buyer_name']) . ', terima kasih sudah membeli tiket ' . $eventTitle . '.',
+              'Kami mau konfirmasi data tiketmu:', '',
+              'Kode: ' . $o['order_code'],
+              'Tiket: ' . trim(explode('. ', (string) $o['tier_name'], 2)[0]) . ' x' . (int) $o['qty']];
+    foreach ($addons as $a) {
+        $lines[] = 'Add-on: ' . $a['name'] . ' x' . (int) $a['qty'];
+    }
+    $lines[] = 'Total: Rp ' . number_format((int) $o['total_price'], 0, ',', '.');
+    $lines[] = '';
+    $lines[] = 'Apakah data di atas sudah benar? Kalau ada yang salah, balas chat ini ya.';
+    return implode("\n", $lines);
+}
 
+// EXPORT (Excel / CSV)
+if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) && $selectedId && $selectedEvent) {
+    $bulan = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    $tgl = function ($ts, $jam = false) use ($bulan) {
+        return (int) date('j', $ts) . ' ' . $bulan[(int) date('n', $ts)] . ' ' . date('Y', $ts) . ($jam ? ', ' . date('H:i', $ts) : '');
+    };
+    $statusLabel = ['confirmed' => 'Confirmed', 'used' => 'Sudah Masuk', 'pending' => 'Pending', 'rejected' => 'Rejected'];
+    $payLabel = function ($m) {
+        $m = (string) $m;
+        if ($m === '') return '–';
+        $map = ['qris' => 'QRIS', 'cash' => 'Cash', 'transfer' => 'Transfer', 'invitation' => 'Undangan'];
+        if (isset($map[strtolower($m)])) return $map[strtolower($m)];
+        if (preg_match('/^([a-z]+)_va$/i', $m, $mm)) return strtoupper($mm[1]) . ' VA';
+        return ucwords(str_replace('_', ' ', $m));
+    };
+
+    $cleanName = function ($n) {
+        $n = trim(preg_replace('/\s+/u', ' ', (string) $n));
+        // Hanya ubah yang seragam (semua kecil / semua KAPITAL); campuran dianggap sudah disengaja
+        if ($n !== '' && (mb_strtolower($n, 'UTF-8') === $n || mb_strtoupper($n, 'UTF-8') === $n)) {
+            $n = mb_convert_case($n, MB_CASE_TITLE, 'UTF-8');
+        }
+        return $n;
+    };
+    $cleanEmail = fn ($e) => strtolower(trim((string) $e));
+    // Nama tier di DB memuat deskripsi panjang ("GROUP 3 PERSON. Include 4-person tent, ...") → ambil judulnya saja
+    $tierShort = fn ($t) => trim(explode('. ', (string) $t, 2)[0]);
+
+    $startTs = strtotime($selectedEvent['event_date_start']);
+    $endTs   = $selectedEvent['event_date_end'] ? strtotime($selectedEvent['event_date_end']) : $startTs;
+    if ($endTs > $startTs && date('Ym', $startTs) === date('Ym', $endTs)) {
+        $eventDate = (int) date('j', $startTs) . ' – ' . $tgl($endTs);
+    } else {
+        $eventDate = $endTs > $startTs ? $tgl($startTs) . ' – ' . $tgl($endTs) : $tgl($startTs);
+    }
+    $exportedAt = $tgl(time(), true);
+    $eventSlug  = trim(preg_replace('/[^a-zA-Z0-9]+/', '-', $selectedEvent['title']), '-');
+    $filename   = 'Laporan-' . $eventSlug . '-' . date('Ymd') . '.' . $_GET['export'];
+
+    $filterNote = [];
+    if ($filterStatus) $filterNote[] = 'Status: ' . ($statusLabel[$filterStatus] ?? $filterStatus);
+    if ($filterSearch) $filterNote[] = 'Pencarian: "' . $filterSearch . '"';
+    $filterNote = $filterNote ? implode(' · ', $filterNote) : 'Semua order';
+
+    // Total dari order yang diexport (hanya confirmed + used yang dihitung sebagai terjual)
     $totalQty = $totalRevenue = 0;
-    foreach ($orders as $i => $o) {
-        fputcsv($out, [
-            $i + 1,
-            $o['order_code'],
-            $o['buyer_name'],
-            $o['buyer_email'] ?: '-',
-            $o['buyer_phone'] ?? '-',
-            $o['tier_name'],
-            $o['qty'],
-            $o['total_price'],
-            $o['payment_method'] ?: '-',
-            $o['status'],
-            date('d M Y H:i', strtotime($o['created_at'])),
-            !empty($o['used_at']) ? date('d M Y H:i', strtotime($o['used_at'])) : '-',
-        ]);
-        if (in_array($o['status'], ['confirmed', 'used'])) {
-            $totalQty     += $o['qty'];
-            $totalRevenue += $o['total_price'];
+    foreach ($orders as $o) {
+        if (in_array($o['status'], ['confirmed', 'used'], true)) {
+            $totalQty     += (int) $o['qty'];
+            $totalRevenue += (int) $o['total_price'];
         }
     }
 
-    fputcsv($out, []);
-    fputcsv($out, []);
-    fputcsv($out, ['', '', '', '', '', '===== RINGKASAN =====']);
-    fputcsv($out, ['', '', '', '', '', 'Event',               $selectedEvent['title']]);
-    fputcsv($out, ['', '', '', '', '', 'Tanggal Export',      date('d M Y H:i')]);
-    fputcsv($out, []);
-    fputcsv($out, ['', '', '', '', '', 'Total Order',         count($orders) . ' order']);
-    fputcsv($out, ['', '', '', '', '', 'Confirmed',           $stats['confirmed'] . ' order']);
-    fputcsv($out, ['', '', '', '', '', 'Sudah Masuk (Used)',  $stats['used'] . ' order']);
-    fputcsv($out, ['', '', '', '', '', 'Pending',             $stats['pending'] . ' order']);
-    fputcsv($out, ['', '', '', '', '', 'Rejected',            $stats['rejected'] . ' order']);
-    fputcsv($out, []);
-    fputcsv($out, ['', '', '', '', '', 'TOTAL TIKET TERJUAL', $totalQty . ' tiket']);
-    fputcsv($out, ['', '', '', '', '', 'TOTAL PENDAPATAN',    'Rp ' . number_format($totalRevenue, 0, ',', '.')]);
+    $dash = '–';
+    $headers = ['No', 'Kode Tiket', 'Nama', 'Email', 'No. HP', 'Tier', 'Add-on', 'Qty', 'Harga Satuan (Rp)', 'Biaya Admin (Rp)', 'Total (Rp)',
+                'Pembayaran', 'Status', 'Tanggal Beli', 'Dibayar Pada', 'Email Tiket', 'Waktu Masuk'];
 
-    fclose($out);
+    // Satu pintu untuk semua kolom turunan, dipakai CSV, Daftar Order, dan Daftar Peserta
+    $derive = function (array $o) use ($addonsByOrder, $dash) {
+        $ad = $addonsByOrder[$o['id']] ?? [];
+        $addonTotal = 0;
+        $parts = [];
+        foreach ($ad as $a) { $parts[] = $a['name'] . ' ×' . (int) $a['qty']; $addonTotal += (int) $a['price'] * (int) $a['qty']; }
+        $unit = (int) $o['price_per_ticket'];
+        return [
+            'addon' => $parts ? implode(', ', $parts) : $dash,
+            'unit'  => $unit,
+            'fee'   => max(0, (int) $o['total_price'] - $unit * (int) $o['qty'] - $addonTotal),
+        ];
+    };
+    $ts = fn ($v) => !empty($v) ? strtotime($v) : null;
+
+    if ($_GET['export'] === 'csv') {
+        // CSV polos: satu tabel bersih saja, pemisah ';' agar langsung rapi di Excel locale Indonesia
+        while (ob_get_level()) ob_end_clean();
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        fwrite($out, "sep=;\r\n");
+        fputcsv($out, $headers, ';');
+        foreach ($orders as $i => $o) {
+            $x = $derive($o);
+            fputcsv($out, [
+                $i + 1, $o['order_code'], $cleanName($o['buyer_name']), $cleanEmail($o['buyer_email']) ?: $dash,
+                $o['buyer_phone'] && $o['buyer_phone'] !== '-' ? $o['buyer_phone'] : $dash,
+                $tierShort($o['tier_name']), $x['addon'], (int) $o['qty'], $x['unit'], $x['fee'], (int) $o['total_price'],
+                $payLabel($o['payment_method']), $statusLabel[$o['status']] ?? $o['status'],
+                date('Y-m-d H:i', strtotime($o['created_at'])),
+                $ts($o['confirmed_at']) ? date('Y-m-d H:i', $ts($o['confirmed_at'])) : $dash,
+                !empty($o['email_sent_at']) ? 'Terkirim' : $dash,
+                $ts($o['used_at']) ? date('Y-m-d H:i', $ts($o['used_at'])) : $dash,
+            ], ';');
+        }
+        fclose($out);
+        exit;
+    }
+
+    // ---------- XLSX ----------
+    require_once dirname(__DIR__) . '/lib/xlsx-writer.php';
+
+    $tierRows = $pdo->prepare("
+        SELECT t.tier_name, t.price, t.quota, t.sold,
+               COUNT(o.id)            AS order_count,
+               COALESCE(SUM(o.total_price),0) AS revenue
+        FROM tickets t
+        LEFT JOIN orders o ON o.ticket_id = t.id AND o.event_id = t.event_id AND o.status IN ('confirmed','used')
+        WHERE t.event_id = ?
+        GROUP BY t.id
+        ORDER BY t.price ASC
+    ");
+    $tierRows->execute([$selectedId]);
+    $tierRows = $tierRows->fetchAll();
+
+    $sold = $pdo->prepare("SELECT COALESCE(SUM(qty),0) FROM orders WHERE event_id = ? AND status IN ('confirmed','used')");
+    $sold->execute([$selectedId]);
+    $soldAll = (int) $sold->fetchColumn();
+
+    $X = 'XlsxWriter';
+
+    // Sheet 1 — Ringkasan
+    $r = [];
+    $r[] = [['Laporan Penjualan Tiket', $X::S_TITLE]];
+    $r[] = [[$selectedEvent['title'], $X::S_SUBTITLE]];
+    $r[] = [];
+    $meta = [
+        ['Lokasi', trim($selectedEvent['location'] . ', ' . $selectedEvent['city'], ', ')],
+        ['Tanggal Event', $eventDate],
+        ['Diekspor', $exportedAt],
+    ];
+    foreach ($meta as [$k, $v]) $r[] = [[$k, $X::S_LABEL], [$v, $X::S_VAL_TEXT], [null, $X::S_VAL_TEXT]];
+    $r[] = [];
+    $r[] = [['RINGKASAN', $X::S_SECTION], [null, $X::S_SECTION]];
+    $sum = [
+        ['Total Order',    (int) $stats['total_order'],  $X::S_VAL_INT],
+        ['Confirmed',      (int) $stats['confirmed'],    $X::S_VAL_INT],
+        ['Sudah Masuk',    (int) $stats['used'],         $X::S_VAL_INT],
+        ['Pending',        (int) $stats['pending'],      $X::S_VAL_INT],
+        ['Rejected',       (int) $stats['rejected'],     $X::S_VAL_INT],
+        ['Tiket Terjual',  $soldAll,                     $X::S_VAL_INT],
+        ['Pendapatan',     (int) $stats['revenue'],      $X::S_VAL_RUPIAH],
+    ];
+    foreach ($sum as [$k, $v, $st]) $r[] = [[$k, $X::S_LABEL], [$v, $st]];
+    $r[] = [];
+    $r[] = [['PER TIER', $X::S_SECTION], [null, $X::S_SECTION], [null, $X::S_SECTION], [null, $X::S_SECTION], [null, $X::S_SECTION], [null, $X::S_SECTION], [null, $X::S_SECTION]];
+    $r[] = [['Tier', $X::S_TH_LEFT], ['Harga', $X::S_TH_RIGHT], ['Kuota', $X::S_TH_CENTER], ['Terjual', $X::S_TH_CENTER], ['Sisa', $X::S_TH_CENTER], ['Order', $X::S_TH_CENTER], ['Pendapatan', $X::S_TH_RIGHT]];
+    $tierSumQuota = $tierSumSold = $tierSumOrders = $tierSumRev = 0;
+    foreach ($tierRows as $t) {
+        $r[] = [
+            [$tierShort($t['tier_name']), $X::S_TEXT],
+            [(int) $t['price'], $X::S_RUPIAH],
+            [(int) $t['quota'], $X::S_INT],
+            [(int) $t['sold'], $X::S_INT],
+            [max(0, (int) $t['quota'] - (int) $t['sold']), $X::S_INT],
+            [(int) $t['order_count'], $X::S_INT],
+            [(int) $t['revenue'], $X::S_RUPIAH],
+        ];
+        $tierSumQuota += (int) $t['quota']; $tierSumSold += (int) $t['sold'];
+        $tierSumOrders += (int) $t['order_count']; $tierSumRev += (int) $t['revenue'];
+    }
+    if ($tierRows) {
+        $r[] = [
+            ['Total', $X::S_TOT_LABEL], [null, $X::S_TOT_BLANK],
+            [$tierSumQuota, $X::S_TOT_INT], [$tierSumSold, $X::S_TOT_INT],
+            [max(0, $tierSumQuota - $tierSumSold), $X::S_TOT_INT],
+            [$tierSumOrders, $X::S_TOT_INT], [$tierSumRev, $X::S_TOT_RUPIAH],
+        ];
+    }
+
+    // Sheet 2 — Daftar Order (satu baris per order, semua data pembeli)
+    $d = [];
+    $d[] = [['Daftar Order — ' . $selectedEvent['title'], $X::S_SUBTITLE]];
+    $d[] = [[$filterNote . '  ·  ' . count($orders) . ' order  ·  Diekspor ' . $exportedAt, $X::S_MUTED]];
+    $d[] = [];
+    $d[] = [
+        ['No', $X::S_TH_CENTER], ['Kode Tiket', $X::S_TH_LEFT], ['Nama', $X::S_TH_LEFT], ['Email', $X::S_TH_LEFT],
+        ['No. HP', $X::S_TH_LEFT], ['Tier', $X::S_TH_LEFT], ['Add-on', $X::S_TH_LEFT], ['Qty', $X::S_TH_CENTER],
+        ['Harga Satuan', $X::S_TH_RIGHT], ['Biaya Admin', $X::S_TH_RIGHT], ['Total', $X::S_TH_RIGHT],
+        ['Pembayaran', $X::S_TH_LEFT], ['Status', $X::S_TH_LEFT], ['Tanggal Beli', $X::S_TH_LEFT],
+        ['Dibayar Pada', $X::S_TH_LEFT], ['Email Tiket', $X::S_TH_LEFT], ['Waktu Masuk', $X::S_TH_LEFT],
+    ];
+    $dt = fn ($v) => $ts($v) ? [$X::serial($ts($v)), $X::S_DATETIME] : [$dash, $X::S_TEXT];
+    foreach ($orders as $i => $o) {
+        $x = $derive($o);
+        $d[] = [
+            [$i + 1, $X::S_INT],
+            [$o['order_code'], $X::S_CODE],
+            [$cleanName($o['buyer_name']), $X::S_TEXT],
+            [$cleanEmail($o['buyer_email']) ?: $dash, $X::S_TEXT],
+            [$o['buyer_phone'] && $o['buyer_phone'] !== '-' ? (string) $o['buyer_phone'] : $dash, $X::S_TEXT],
+            [$tierShort($o['tier_name']), $X::S_TEXT],
+            [$x['addon'], $X::S_TEXT],
+            [(int) $o['qty'], $X::S_INT],
+            [$x['unit'], $X::S_RUPIAH],
+            [$x['fee'], $X::S_RUPIAH],
+            [(int) $o['total_price'], $X::S_RUPIAH],
+            [$payLabel($o['payment_method']), $X::S_TEXT],
+            [$statusLabel[$o['status']] ?? $o['status'], $X::S_TEXT],
+            $dt($o['created_at']),
+            $dt($o['confirmed_at']),
+            [!empty($o['email_sent_at']) ? 'Terkirim' : (!empty($o['email_error']) ? 'Gagal' : $dash), $X::S_TEXT],
+            $dt($o['used_at']),
+        ];
+    }
+    $headerRow = 4;
+    $lastRow   = $headerRow + max(1, count($orders));
+    if ($orders) {
+        $blank = [null, $X::S_TOT_BLANK];
+        $d[] = [];
+        $d[] = [
+            $blank, $blank, $blank, $blank, $blank, $blank,
+            ['Total terjual (Confirmed + Sudah Masuk)', $X::S_TOT_LABEL],
+            [$totalQty, $X::S_TOT_INT], $blank, $blank, [$totalRevenue, $X::S_TOT_RUPIAH],
+            $blank, $blank, $blank, $blank, $blank, $blank,
+        ];
+    } else {
+        $d[] = [[null], ['Belum ada order untuk filter ini.', $X::S_MUTED]];
+    }
+
+    // Sheet 3 — Daftar Peserta (satu baris per tiket, A–Z; untuk cek di pintu masuk)
+    $pp = [];
+    foreach ($orders as $o) {
+        if (!in_array($o['status'], ['confirmed', 'used'], true)) continue;
+        for ($k = 1; $k <= (int) $o['qty']; $k++) {
+            $pp[] = ['name' => $cleanName($o['buyer_name']), 'o' => $o, 'k' => $k];
+        }
+    }
+    usort($pp, fn ($a, $b) => strcasecmp($a['name'], $b['name']) ?: strcmp($a['o']['order_code'], $b['o']['order_code']) ?: $a['k'] <=> $b['k']);
+
+    $pr = [];
+    $pr[] = [['Daftar Peserta — ' . $selectedEvent['title'], $X::S_SUBTITLE]];
+    $pr[] = [[count($pp) . ' tiket aktif (Confirmed + Sudah Masuk)  ·  urut nama A–Z  ·  Diekspor ' . $exportedAt, $X::S_MUTED]];
+    $pr[] = [];
+    $pr[] = [
+        ['No', $X::S_TH_CENTER], ['Nama', $X::S_TH_LEFT], ['Email', $X::S_TH_LEFT], ['No. HP', $X::S_TH_LEFT],
+        ['Tier', $X::S_TH_LEFT], ['Kode Tiket', $X::S_TH_LEFT], ['Tiket', $X::S_TH_CENTER],
+        ['Kehadiran', $X::S_TH_LEFT], ['Waktu Masuk', $X::S_TH_LEFT],
+    ];
+    foreach ($pp as $i => $row) {
+        $o = $row['o'];
+        $pr[] = [
+            [$i + 1, $X::S_INT],
+            [$row['name'], $X::S_TEXT],
+            [$cleanEmail($o['buyer_email']) ?: $dash, $X::S_TEXT],
+            [$o['buyer_phone'] && $o['buyer_phone'] !== '-' ? (string) $o['buyer_phone'] : $dash, $X::S_TEXT],
+            [$tierShort($o['tier_name']), $X::S_TEXT],
+            [$o['order_code'], $X::S_CODE],
+            [$row['k'] . ' / ' . (int) $o['qty'], $X::S_TEXT],
+            [$o['status'] === 'used' ? 'Sudah Masuk' : 'Belum', $X::S_TEXT],
+            $dt($o['used_at']),
+        ];
+    }
+    if (!$pp) $pr[] = [[null], ['Belum ada tiket aktif untuk filter ini.', $X::S_MUTED]];
+    $pLast = 4 + max(1, count($pp));
+
+    $xl = new XlsxWriter();
+    $xl->addSheet('Ringkasan', $r, [
+        'widths' => [34, 24, 12, 12, 12, 12, 18],
+        'rowHeights' => [1 => 34, 2 => 24],
+    ]);
+    $xl->addSheet('Daftar Order', $d, [
+        'widths' => [6, 14, 26, 32, 16, 32, 22, 7, 15, 14, 16, 14, 14, 20, 20, 12, 20],
+        'rowHeights' => [1 => 26, $headerRow => 26],
+        'freeze' => $headerRow,
+        'filter' => 'A' . $headerRow . ':Q' . $lastRow,
+        'landscape' => true,
+    ]);
+    $xl->addSheet('Daftar Peserta', $pr, [
+        'widths' => [6, 28, 32, 16, 32, 14, 9, 14, 20],
+        'rowHeights' => [1 => 26, 4 => 26],
+        'freeze' => 4,
+        'filter' => 'A4:I' . $pLast,
+        'landscape' => true,
+    ]);
+
+    if (!$xl->output($filename)) {
+        // ext-zip tidak ada → jatuh ke CSV
+        header('Location: report-event?event_id=' . $selectedId . '&export=csv'
+            . ($filterStatus ? '&status=' . urlencode($filterStatus) : '')
+            . ($filterSearch ? '&search=' . urlencode($filterSearch) : ''));
+    }
     exit;
 }
 ?>
@@ -559,28 +830,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv' && $selectedId && $selec
             .main { margin: 0; padding: 16px; }
         }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<nav class="sidebar">
-    <div class="sidebar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab">
-    </div>
-    <div class="sidebar-menu">
-        <a href="./">Dashboard</a>
-        <a href="event-add">Tambah Event</a>
-        <a href="orders">Orders</a>
-        <a href="scan-tiket">Scan Tiket</a>
-        <a href="ots-buy">Beli OTS</a>
-        <a href="report-event" class="active">Laporan Event</a>
-        <a href="manage-admin">Kelola Admin</a>
-        <a href="../index-event" target="_blank">Lihat Halaman ↗</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">Logout — <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <!-- MAIN -->
 <div class="main">
@@ -677,59 +931,78 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv' && $selectedId && $selec
                 <option value="pending"   <?= ($_GET['status'] ?? '') === 'pending'   ? 'selected' : '' ?>>Pending</option>
                 <option value="rejected"  <?= ($_GET['status'] ?? '') === 'rejected'  ? 'selected' : '' ?>>Rejected</option>
             </select>
-            <a href="report-event?event_id=<?= $selectedId ?>&export=csv<?= !empty($_GET['status']) ? '&status='.urlencode($_GET['status']) : '' ?><?= !empty($_GET['search']) ? '&search='.urlencode($_GET['search']) : '' ?>"
-               class="btn-export">Export CSV</a>
+            <?php $exportQs = (!empty($_GET['status']) ? '&status='.urlencode($_GET['status']) : '') . (!empty($_GET['search']) ? '&search='.urlencode($_GET['search']) : ''); ?>
+            <a href="report-event?event_id=<?= $selectedId ?>&export=xlsx<?= $exportQs ?>" class="btn-export">Export Excel</a>
+            <a href="report-event?event_id=<?= $selectedId ?>&export=csv<?= $exportQs ?>" class="btn-export">CSV</a>
             <span class="result-count"><?= count($orders) ?> data</span>
         </div>
     </form>
 
     <div class="table-card">
         <div class="table-wrap">
-            <table>
+            <table class="table-cards">
                 <thead>
                     <tr>
                         <th>#</th>
                         <th>Kode</th>
                         <th>Nama</th>
-                        <th>Email</th>
+                        <th>Email / HP</th>
                         <th>Tier</th>
+                        <th>Add-on</th>
                         <th>Qty</th>
                         <th>Total</th>
                         <th>Bayar</th>
                         <th>Status</th>
-                        <th>Tanggal Beli</th>
+                        <th>WhatsApp</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if ($orders): ?>
-                    <?php foreach ($orders as $i => $o): ?>
+                    <?php foreach ($orders as $i => $o):
+                        $ad    = $addonsByOrder[$o['id']] ?? [];
+                        $phone = ($o['buyer_phone'] && $o['buyer_phone'] !== '-') ? $o['buyer_phone'] : '';
+                        $wa    = waNumber($phone);
+                    ?>
                     <tr>
-                        <td style="color:rgba(0,0,0,0.25);font-size:0.8rem"><?= $i + 1 ?></td>
-                        <td>
-                            <span style="font-family:monospace;font-weight:700;font-size:0.8rem;color:#000000">
+                        <td data-label="#" style="color:rgba(0,0,0,0.25);font-size:0.8rem"><?= $i + 1 ?></td>
+                        <td data-label="Kode">
+                            <span style="font-family:monospace;font-weight:700;font-size:0.8rem;color:#000000;white-space:nowrap">
                                 <?= htmlspecialchars($o['order_code']) ?>
                             </span>
                             <?php if (!empty($o['payment_method']) && in_array($o['payment_method'], ['cash','qris','transfer'])): ?>
                             <span class="ots-tag">OTS</span>
                             <?php endif; ?>
                         </td>
-                        <td style="font-weight:600"><?= htmlspecialchars($o['buyer_name']) ?></td>
-                        <td style="color:rgba(0,0,0,0.4);font-size:0.8rem"><?= htmlspecialchars($o['buyer_email'] ?: '-') ?></td>
-                        <td><?= htmlspecialchars($o['tier_name']) ?></td>
-                        <td style="text-align:center;font-weight:700"><?= $o['qty'] ?></td>
-                        <td style="font-weight:700">Rp <?= number_format($o['total_price'], 0, ',', '.') ?></td>
-                        <td style="color:rgba(0,0,0,0.4);text-transform:uppercase;font-size:0.75rem;font-weight:600">
+                        <td data-label="Nama" style="font-weight:600"><?= htmlspecialchars($o['buyer_name']) ?></td>
+                        <td data-label="Email / HP" style="color:rgba(0,0,0,0.5);font-size:0.8rem;line-height:1.5">
+                            <?= htmlspecialchars($o['buyer_email'] ?: '-') ?>
+                            <div><?= htmlspecialchars($phone ?: '-') ?></div>
+                        </td>
+                        <td data-label="Tier"><?= htmlspecialchars($o['tier_name']) ?></td>
+                        <td data-label="Add-on" style="font-size:0.8rem;line-height:1.5">
+                            <?php if ($ad): foreach ($ad as $a): ?>
+                            <div><?= htmlspecialchars($a['name']) ?> &times; <?= (int) $a['qty'] ?></div>
+                            <?php endforeach; else: ?><span style="color:rgba(0,0,0,0.25)">–</span><?php endif; ?>
+                        </td>
+                        <td data-label="Qty" style="text-align:center;font-weight:700"><?= $o['qty'] ?></td>
+                        <td data-label="Total" style="font-weight:700">Rp <?= number_format($o['total_price'], 0, ',', '.') ?></td>
+                        <td data-label="Bayar" style="color:rgba(0,0,0,0.4);text-transform:uppercase;font-size:0.75rem;font-weight:600">
                             <?= htmlspecialchars($o['payment_method'] ?: '-') ?>
                         </td>
-                        <td><span class="badge <?= $o['status'] ?>"><?= ucfirst($o['status']) ?></span></td>
-                        <td style="color:rgba(0,0,0,0.4);white-space:nowrap;font-size:0.8rem">
-                            <?= date('d M Y, H:i', strtotime($o['created_at'])) ?>
+                        <td data-label="Status"><span class="badge <?= $o['status'] ?>"><?= ucfirst($o['status']) ?></span><div class="order-date"><?= date('d M Y, H:i', strtotime($o['created_at'])) ?></div></td>
+                        <td data-label="WhatsApp">
+                            <?php if ($wa): ?>
+                            <a class="btn btn-sm" target="_blank" rel="noopener"
+                               href="https://wa.me/<?= $wa ?>?text=<?= rawurlencode(waConfirmText($o, $ad, $selectedEvent['title'])) ?>">Chat WA</a>
+                            <?php else: ?>
+                            <span style="font-size:0.75rem;color:rgba(0,0,0,0.3)">No HP kosong</span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
                     <?php else: ?>
                     <tr>
-                        <td colspan="10">
+                        <td colspan="11">
                             <div class="empty-state">
                                 <div style="font-size:0.875rem">Belum ada order untuk filter ini.</div>
                             </div>

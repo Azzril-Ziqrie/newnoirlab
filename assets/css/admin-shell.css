@@ -157,5 +157,5 @@ textarea { min-height: 96px; }
 
 /* Layar sedang: kolom Event disembunyikan (sudah ada di filter) supaya kolom Action tidak terpotong. */
 @media (min-width: 861px) and (max-width: 1499px) {
-    .table-cards th:nth-child(3), .table-cards td[data-label="Event"] { display: none; }
+    .table-cards th.col-event, .table-cards td[data-label="Event"] { display: none; }
 }

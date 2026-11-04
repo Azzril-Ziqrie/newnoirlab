@@ -592,7 +592,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
                     <tr>
                         <th>Code</th>
                         <th>Buyer</th>
-                        <th>Event</th>
+                        <th class="col-event">Event</th>
                         <th>Tier</th>
                         <th>Qty</th>
                         <th>Total</th>
