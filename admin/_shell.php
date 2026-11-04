@@ -16,7 +16,7 @@ function adminNavItems(): array
         'Sales'    => [['orders', 'Orders', 'orders'], ['ots-buy', 'On-the-spot', 'ots-buy'],
                        ['resend-email', 'Resend Email', 'resend-email'], ['announce', 'Announcement', 'announce']],
         'Door'     => [['scan-tiket', 'Scan Ticket', 'scan-tiket']],
-        'Reports'  => [['report-event', 'Event Report', 'report-event']],
+        'Reports'  => [['report-event', 'Event Report', 'report-event'], ['gear-recap', 'Equipment Recap', 'gear-recap']],
         'Settings' => [['manage-admin', 'Manage Admins', 'manage-admin']],
     ];
     // Halaman yang hanya ada di komputer lokal tidak dimunculkan di server.
