@@ -69,16 +69,20 @@ if (isset($_GET['saved'])) $flash = ['ok', 'Order diperbarui. Kirim ulang email 
 <html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Edit Order — Noirlab Admin</title>
 <style>
-*{box-sizing:border-box}body{font-family:'Helvetica Neue',Arial,sans-serif;margin:0;padding:40px 24px;color:#000;background:#fff}
-.wrap{max-width:640px;margin:0 auto}h1{font-size:1.5rem;margin:0 0 4px}.sub{color:rgba(0,0,0,.5);font-size:.85rem;margin-bottom:28px}
+*{box-sizing:border-box}body{font-family:'Helvetica Neue',Arial,sans-serif;margin:0;color:#000;background:#fff}
+.main{padding:50px 48px}.wrap{max-width:640px}@media(max-width:860px){.main{padding:24px 16px}}h1{font-size:1.5rem;margin:0 0 4px}.sub{color:rgba(0,0,0,.5);font-size:.85rem;margin-bottom:28px}
 label{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(0,0,0,.45);margin:18px 0 6px}
 input,select{width:100%;padding:10px 12px;border:1px solid #e5e5e5;font-size:.9rem;font-family:inherit}
 .addon{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:.875rem}
 .addon input{width:72px}.box{border:1px solid #e5e5e5;padding:4px 14px}
 .hint{font-size:.78rem;color:rgba(0,0,0,.5);margin-top:6px}.hint button{background:none;border:0;text-decoration:underline;cursor:pointer;font-size:.78rem;padding:0}
-.btn{padding:12px 22px;background:#000;color:#fff;border:0;font-weight:700;cursor:pointer;font-size:.875rem}.back{margin-left:14px;color:rgba(0,0,0,.5);font-size:.85rem}
+.btn{background:#000;color:#fff}.back{margin-left:14px;color:rgba(0,0,0,.5);font-size:.85rem}
 .alert{padding:12px 16px;border:1px solid #e5e5e5;margin-bottom:20px;font-size:.875rem}.alert.err{border-color:#000;font-weight:600}
-</style></head><body><div class="wrap">
+</style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
+</head><body>
+<?php adminShell(); ?>
+<div class="main"><div class="wrap">
 <h1>Edit Order <?= htmlspecialchars($order['order_code']) ?></h1>
 <div class="sub"><?= htmlspecialchars($order['buyer_name']) ?> · <?= htmlspecialchars($order['event_title']) ?> · status <strong><?= htmlspecialchars($order['status']) ?></strong></div>
 <?php if ($flash): ?><div class="alert <?= $flash[0] ?>"><?= htmlspecialchars($flash[1]) ?></div><?php endif; ?>
@@ -109,7 +113,7 @@ input,select{width:100%;padding:10px 12px;border:1px solid #e5e5e5;font-size:.9r
  <button type="button" id="useCalc">pakai angka ini</button><br>Total dibiarkan seperti semula agar sesuai uang yang benar-benar masuk.</div>
 
 <p style="margin-top:28px"><button class="btn" type="submit">Simpan perubahan</button><a class="back" href="orders">Kembali</a></p>
-</form></div>
+</form></div></div>
 <script>
 const ADDONS = <?= json_encode($addonsByTier) ?>, CUR = <?= json_encode((object) $current) ?>, ORIG_TIER = <?= (int) $order['ticket_id'] ?>, FEE = <?= ADMIN_FEE_RATE ?>;
 const tier = document.getElementById('tier'), box = document.getElementById('addons'), unit = document.getElementById('unit'), qty = document.getElementById('qty');

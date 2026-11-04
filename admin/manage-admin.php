@@ -293,26 +293,11 @@ $admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER B
             .card { padding: 20px; }
         }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<nav class="sidebar">
-    <div class="sidebar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab">
-    </div>
-    <div class="sidebar-menu">
-        <a href="./">Dashboard</a>
-        <a href="event-add">Tambah Event</a>
-        <a href="orders">Orders</a>
-        <a href="scan-tiket">Scan Tiket</a>
-        <a href="manage-admin" class="active">Kelola Admin</a>
-        <a href="../index-event" target="_blank">Lihat Halaman ↗</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">Logout — <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <!-- MAIN -->
 <div class="main">

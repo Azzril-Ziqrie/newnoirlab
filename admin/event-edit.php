@@ -45,58 +45,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Edit Event - Admin Noirlab</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f3f4f6; color: #111827; display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; flex-shrink: 0; background: #1f2937; color: #fff; display: flex; flex-direction: column; padding: 28px 0; position: fixed; top: 0; left: 0; height: 100vh; }
-        .sidebar-logo { font-size: 17px; font-weight: 700; padding: 0 24px 28px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-        .sidebar-menu { padding: 20px 12px; flex: 1; }
-        .sidebar-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; color: #9ca3af; text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 4px; transition: background .2s, color .2s; }
-        .sidebar-menu a:hover { background: rgba(255,255,255,0.08); color: #fff; }
-        .sidebar-footer { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.08); }
-        .sidebar-footer a { font-size: 13px; color: #6b7280; text-decoration: none; }
-
-        .main { margin-left: 220px; flex: 1; padding: 36px 32px; }
-        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
-        .page-header h1 { font-size: 20px; font-weight: 600; }
-
-        .alert-error { padding: 12px 18px; border-radius: 10px; font-size: 14px; margin-bottom: 20px; background: #fef2f2; color: #dc2626; }
-
-        .form-card { background: #fff; border-radius: 16px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
+        body { background: #fff; display: flex; min-height: 100vh; }
+        .main { flex: 1; padding: 50px 48px; max-width: 980px; }
+        .page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; padding-bottom: 28px; border-bottom: 1px solid #e5e5e5; }
+        .page-header h1 { font-size: 1.75rem; font-weight: 700; }
+        .alert-error { padding: 13px 18px; border: 1px solid #e5e5e5; border-left: 3px solid #b00020; color: #900; font-size: .875rem; margin-bottom: 24px; }
+        .form-card { border: 1px solid #e5e5e5; padding: 28px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
-        .form-group { margin-bottom: 18px; }
+        .form-group { margin-bottom: 20px; }
         .form-group.full { grid-column: 1 / -1; }
-        label { font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px; }
-        input, select, textarea { width: 100%; padding: 10px 13px; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 14px; font-family: inherit; transition: border-color .2s; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: #9ca3af; }
-        small { font-size: 12px; color: #9ca3af; display: block; margin-top: 4px; }
-        .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid #f3f4f6; }
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; border: none; cursor: pointer; font-family: inherit; transition: opacity .2s; }
-        .btn:hover { opacity: 0.85; }
-        .btn-primary { background: #1f2937; color: #fff; }
-        .btn-ghost { background: #f3f4f6; color: #374151; }
-
-        @media (max-width: 860px) { .form-grid { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
+        label { display: block; margin-bottom: 7px; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(0,0,0,.45); }
+        small { display: block; margin-top: 5px; font-size: .75rem; color: rgba(0,0,0,.4); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 22px; border-top: 1px solid #e5e5e5; }
+        @media (max-width: 860px) { .main { padding: 24px 16px; } .form-grid { grid-template-columns: 1fr; } .form-card { padding: 20px 16px; } .page-header h1 { font-size: 1.4rem; } }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<nav class="sidebar">
-    <div class="sidebar-logo">⬛ Noirlab Admin</div>
-    <div class="sidebar-menu">
-        <a href="./">🗂 Dashboard</a>
-        <a href="event-add">➕ Tambah Event</a>
-        <a href="../index-event" target="_blank">🔗 Lihat Halaman</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">⏏ Logout</a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <div class="main">
     <div class="page-header">
         <h1>Edit Event</h1>
         <div style="display:flex;gap:10px">
-            <a href="ticket-manage?event_id=<?= $id ?>" class="btn btn-ghost">🎫 Kelola Tiket</a>
-            <a href="./" class="btn btn-ghost">← Kembali</a>
+            <a href="ticket-manage?event_id=<?= $id ?>" class="btn btn-ghost">Manage Tickets</a>
+            <a href="./" class="btn btn-ghost">Back</a>
         </div>
     </div>
 

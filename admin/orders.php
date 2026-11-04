@@ -491,38 +491,11 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
             .stats { grid-template-columns: 1fr; }
         }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<div class="mobile-header">
-    <div class="mobile-logo">Noirlab Admin</div>
-    <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-</div>
-
-<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab" onerror="this.style.display='none'">
-    </div>
-    <div class="sidebar-menu">
-        <a href="./">Dashboard</a>
-        <a href="event-add">Add Event</a>
-        <a href="orders" class="active">
-            Orders
-            <?php if ($pendingCount > 0): ?>
-            <span class="notif-badge"><?= $pendingCount ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="resend-email">Resend Email</a>
-        <a href="scan-tiket">Scan Ticket</a>
-        <a href="manage-admin">Manage Admins</a>
-        <a href="../index-event" target="_blank">View Page ↗</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">Logout — <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <div class="main">
     <div class="page-header">
@@ -614,7 +587,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
         <div class="table-header"><?= count($orders) ?> orders found</div>
         <?php if ($orders): ?>
         <div class="table-responsive">
-            <table>
+            <table class="table-cards">
                 <thead>
                     <tr>
                         <th>Code</th>
@@ -624,29 +597,27 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
                         <th>Qty</th>
                         <th>Total</th>
                         <th>Status</th>
-                        <th>Date</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($orders as $o): ?>
                     <tr>
-                        <td><span class="order-code"><?= htmlspecialchars($o['order_code']) ?></span></td>
-                        <td>
+                        <td data-label="Code"><span class="order-code"><?= htmlspecialchars($o['order_code']) ?></span></td>
+                        <td data-label="Buyer">
                             <div style="font-weight:600;font-size:0.875rem"><?= htmlspecialchars($o['buyer_name']) ?></div>
                             <div style="font-size:0.75rem;color:rgba(0,0,0,0.4);margin-top:2px"><?= htmlspecialchars($o['buyer_email']) ?></div>
                         </td>
-                        <td>
+                        <td data-label="Event">
                             <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;font-size:0.875rem">
                                 <?= htmlspecialchars($o['event_title']) ?>
                             </div>
                         </td>
-                        <td style="font-size:0.875rem"><?= htmlspecialchars($o['tier_name']) ?></td>
-                        <td style="text-align:center;font-weight:600"><?= $o['qty'] ?></td>
-                        <td style="font-weight:700;font-size:0.875rem">Rp <?= number_format($o['total_price'], 0, ',', '.') ?></td>
-                        <td><span class="badge <?= $o['status'] ?>"><?= ucfirst($o['status']) ?></span></td>
-                        <td style="color:rgba(0,0,0,0.4);white-space:nowrap;font-size:0.8rem"><?= date('d M Y, H:i', strtotime($o['created_at'])) ?></td>
-                        <td>
+                        <td data-label="Tier" style="font-size:0.875rem"><?= htmlspecialchars($o['tier_name']) ?></td>
+                        <td data-label="Qty" style="text-align:center;font-weight:600"><?= $o['qty'] ?></td>
+                        <td data-label="Total" style="font-weight:700;font-size:0.875rem">Rp <?= number_format($o['total_price'], 0, ',', '.') ?></td>
+                        <td data-label="Status"><span class="badge <?= $o['status'] ?>"><?= ucfirst($o['status']) ?></span><div class="order-date"><?= date('d M Y, H:i', strtotime($o['created_at'])) ?></div></td>
+                        <td data-label="Actions">
                             <div class="actions">
                                 <?php if ($o['payment_proof']): ?>
                                 <button class="btn" onclick='showProof(<?= htmlspecialchars(json_encode([

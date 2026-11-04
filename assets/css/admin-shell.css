@@ -1,0 +1,161 @@
+/* Kerangka admin bersama. Dimuat paling akhir di <head>, jadi menggantikan gaya sidebar lama tiap halaman. */
+:root {
+    --a-ink: #000;
+    --a-ink-2: rgba(0,0,0,.62);
+    --a-ink-3: rgba(0,0,0,.42);
+    --a-line: #e5e5e5;
+    --a-wash: #f7f7f7;
+    --a-danger: #b00020;
+    --a-side: 232px;
+    --a-ease: cubic-bezier(.32,.72,0,1);   /* kurva sheet iOS: berhenti halus tanpa memantul */
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+       -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; color: var(--a-ink); background: #fff; }
+
+/* ── Sidebar ───────────────────────────── */
+.sidebar { position: fixed; inset: 0 auto 0 0; width: var(--a-side); height: 100dvh; padding: 28px 0 20px;
+           background: #fff; border-right: 1px solid var(--a-line); display: flex; flex-direction: column;
+           overflow-y: auto; overscroll-behavior: contain; z-index: 50; transform: none; }
+.sidebar-logo { padding: 0 28px 22px; border-bottom: 1px solid var(--a-line); }
+.sidebar-logo img { display: block; height: 72px; width: auto; margin: 0 auto; }
+.sidebar-menu { flex: 1; display: flex; flex-direction: column; gap: 1px; padding: 8px 14px 16px; }
+.nav-group { padding: 18px 12px 6px; font-size: .66rem; font-weight: 700; letter-spacing: .09em;
+             text-transform: uppercase; color: var(--a-ink-3); }
+.sidebar-menu a { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 8px 12px; border-left: 2px solid transparent;
+                  color: var(--a-ink-2); font-size: .875rem; font-weight: 500; text-decoration: none; text-transform: none;
+                  letter-spacing: 0; transition: color .15s, background-color .15s, transform .1s; }
+.sidebar-menu a:hover { color: var(--a-ink); background: var(--a-wash); }
+.sidebar-menu a:active { transform: scale(.98); }
+.sidebar-menu a.active { color: var(--a-ink); font-weight: 700; border-left-color: var(--a-ink); background: var(--a-wash); }
+.notif-badge { margin-left: auto; min-width: 20px; padding: 1px 7px; border-radius: 999px; background: var(--a-ink); color: #fff;
+               font-size: .68rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.sidebar-footer { display: flex; flex-direction: column; gap: 2px; padding: 14px 14px 0; border-top: 1px solid var(--a-line); }
+.sidebar-footer a { padding: 8px 12px; font-size: .8rem; color: var(--a-ink-3); text-decoration: none; transition: color .15s; }
+.sidebar-footer a:hover { color: var(--a-ink); }
+
+/* ── Konten ────────────────────────────── */
+.main { margin-left: var(--a-side); min-width: 0; }
+.page-header h1 { letter-spacing: -.02em; line-height: 1.1; }
+th, td, .stat, .notif-badge { font-variant-numeric: tabular-nums; }
+
+/* ── Umpan balik tombol & fokus ────────── */
+button, .btn, [class^="btn-"], [class*=" btn-"] { transition: background-color .15s, color .15s, border-color .15s, transform .1s; }
+button:not(:disabled):active, .btn:active, [class^="btn-"]:active, [class*=" btn-"]:active { transform: scale(.97); }
+:focus-visible { outline: 2px solid var(--a-ink); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--a-ink); box-shadow: 0 0 0 3px rgba(0,0,0,.08); }
+
+/* ── Topbar & drawer mobile ────────────── */
+.mobile-header, .sidebar-overlay { display: none; }
+
+@media (max-width: 860px) {
+    body { display: block; }
+    .mobile-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between;
+                     height: 56px; padding: 0 16px; background: rgba(255,255,255,.78); border-bottom: 1px solid rgba(0,0,0,.08);
+                     -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); }
+    .mobile-logo { height: 34px; width: auto; }
+    .menu-toggle { position: relative; width: 44px; height: 44px; margin-right: -10px; background: none; border: 0; cursor: pointer; }
+    .menu-toggle span { position: absolute; left: 12px; right: 12px; height: 2px; background: var(--a-ink);
+                        transition: transform .35s var(--a-ease), top .35s var(--a-ease); }
+    .menu-toggle span:first-child { top: 18px; }
+    .menu-toggle span:last-child { top: 25px; }
+    .menu-toggle[aria-expanded="true"] span:first-child { top: 21px; transform: rotate(45deg); }
+    .menu-toggle[aria-expanded="true"] span:last-child { top: 21px; transform: rotate(-45deg); }
+
+    .sidebar { width: min(300px, 84vw); transform: translateX(calc(-100% + var(--drag, 0px))); box-shadow: none;
+               transition: transform .42s var(--a-ease), box-shadow .42s var(--a-ease); will-change: transform; }
+    .sidebar.open { transform: translateX(var(--drag, 0px)); box-shadow: 8px 0 40px rgba(0,0,0,.18); }
+    .sidebar.dragging { transition: none; }       /* 1:1 mengikuti jari, tanpa animasi */
+    .sidebar-overlay { display: block; position: fixed; inset: 0; z-index: 45; background: rgba(0,0,0,.38);
+                       opacity: 0; pointer-events: none; transition: opacity .3s ease; }
+    .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+    .main { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar, .sidebar-overlay, .menu-toggle span { transition: opacity .2s ease; }
+    @media (max-width: 860px) { .sidebar { transform: none; opacity: 0; pointer-events: none; }
+                                .sidebar.open { opacity: 1; pointer-events: auto; } }
+    button:active, .btn:active { transform: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) { .mobile-header { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media print { .sidebar, .mobile-header, .sidebar-overlay { display: none !important; } .main { margin-left: 0 !important; } }
+
+/* ── Kontrol seragam: tombol & field ───────────────────────────────
+   Satu sistem untuk semua halaman: primer (hitam), sekunder (garis), bahaya (merah).
+   Warna biru/hijau/kuning lama dijadikan sekunder supaya UI tetap monokrom. */
+.btn, .btn-primary, .btn-submit, .btn-search, .btn-scan, .btn-print, .btn-export, .btn-select, .btn-confirm-entry {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 18px;
+    border: 1px solid var(--a-ink); border-radius: 0; background: #fff; color: var(--a-ink);
+    font: 600 .8rem/1 inherit; font-family: inherit; letter-spacing: .01em; text-decoration: none; white-space: nowrap;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.btn:hover, .btn-print:hover, .btn-export:hover, .btn-select:hover { background: var(--a-ink); color: #fff; border-color: var(--a-ink); opacity: 1; }
+
+.btn-primary, .btn-submit, .btn-search, .btn-scan, .btn-confirm-entry, .btn-confirm { background: var(--a-ink); color: #fff; border-color: var(--a-ink); }
+.btn-primary:hover, .btn-submit:hover, .btn-search:hover, .btn-scan:hover, .btn-confirm-entry:hover, .btn-confirm:hover { background: #2b2b2b; border-color: #2b2b2b; opacity: 1; }
+
+.btn-ghost, .btn-blue, .btn-yellow, .btn-green, .btn-reject, .btn-print, .btn-export, .btn-select { border-color: var(--a-line); color: var(--a-ink-2); background: #fff; }
+.btn-ghost:hover, .btn-blue:hover, .btn-yellow:hover, .btn-green:hover, .btn-reject:hover { background: var(--a-ink); color: #fff; border-color: var(--a-ink); }
+
+.btn-red, .btn-danger { border-color: rgba(176,0,32,.35); color: var(--a-danger); background: #fff; }
+.btn-red:hover, .btn-danger:hover { background: var(--a-danger); color: #fff; border-color: var(--a-danger); }
+
+.btn-sm { min-height: 32px; padding: 0 12px; font-size: .75rem; }
+.btn-full { width: 100%; }
+.btn:disabled, .btn-primary:disabled, .btn-submit:disabled, .btn-confirm-entry:disabled, button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea {
+    min-height: 38px; border: 1px solid var(--a-line); border-radius: 0; background: #fff; color: var(--a-ink);
+    font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+textarea { min-height: 96px; }
+.alert, .alert-error { border-radius: 0; }
+
+@media (max-width: 860px) {
+    .sidebar { display: flex !important; }            /* beberapa halaman lama menyembunyikannya di layar kecil */
+    .main { padding-left: 16px; padding-right: 16px; }
+    /* Target sentuh minimal 44px dan font 16px supaya iOS tidak zoom saat field difokuskan. */
+    .btn, .btn-primary, .btn-submit, .btn-search, .btn-scan, .btn-print, .btn-export, .btn-select, .btn-confirm-entry { min-height: 44px; padding: 0 18px; font-size: .85rem; }
+    .btn-sm { min-height: 40px; padding: 0 14px; }
+    input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea { min-height: 44px; font-size: 16px; }
+    .page-header { flex-wrap: wrap; gap: 12px; }
+    td .btn, td [class^="btn"] { margin: 2px 4px 2px 0; }
+    table { font-size: .85rem; }
+    .main > .search-bar, .main > form.search-bar { flex-wrap: wrap; }
+    .main > .search-bar input, .main > form.search-bar input[type=text] { max-width: none; flex: 1 1 100%; }
+}
+
+/* ── Tabel: nyaman di desktop, jadi kartu di layar kecil ───────────── */
+.table-cards { min-width: 0; table-layout: auto; }
+.table-cards th, .table-cards td { padding-left: 12px; padding-right: 12px; vertical-align: middle; }
+.table-cards .order-code { white-space: nowrap; letter-spacing: .5px; }
+.table-cards td[data-label="Tier"] { min-width: 150px; max-width: 190px; font-size: .8rem !important; line-height: 1.4; }
+.table-cards td[data-label="Event"] { max-width: 100px; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.table-cards td[data-label="Total"], .table-cards td[data-label="Last send"], .table-cards td[data-label="Status"] { white-space: nowrap; }
+.table-cards .order-date { margin-top: 5px; font-size: .7rem; font-weight: 400; color: var(--a-ink-3); }
+.table-cards td[data-label="Actions"], .table-cards td[data-label="Action"] { min-width: 130px; font-size: .72rem; line-height: 1.5; }
+.table-cards td .btn { min-height: 30px; padding: 0 11px; font-size: .72rem; margin: 3px 4px 3px 0; }
+
+@media (max-width: 860px) {
+    .table-responsive { overflow-x: visible; }
+    .table-cards, .table-cards tbody, .table-cards tr, .table-cards td { display: block; width: 100%; min-width: 0; }
+    .table-cards thead { display: none; }
+    .table-cards tr { padding: 14px 16px; border-bottom: 1px solid var(--a-line); }
+    .table-cards tr:last-child { border-bottom: 0; }
+    .table-cards tr:hover td { background: none; }
+    .table-cards td { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 5px 0 !important;
+                      border: 0 !important; text-align: right; max-width: none !important; min-width: 0 !important; white-space: normal !important; }
+    .table-cards td::before { content: attr(data-label); flex: 0 0 76px; text-align: left; font-size: .64rem; font-weight: 700;
+                              letter-spacing: .08em; text-transform: uppercase; color: var(--a-ink-3); }
+    .table-cards td[data-label="Code"] { padding-bottom: 8px !important; }
+    .table-cards .order-date { margin: 0; }
+    .table-cards td[data-label="Actions"], .table-cards td[data-label="Action"] { justify-content: flex-start; flex-wrap: wrap; gap: 8px; padding-top: 12px !important; }
+    .table-cards td[data-label="Actions"]::before, .table-cards td[data-label="Action"]::before { display: none; }
+    .table-cards td[data-label="Actions"] > *, .table-cards td[data-label="Action"] > * { flex: 1 1 auto; }
+}
+
+/* Layar sedang: kolom Event disembunyikan (sudah ada di filter) supaya kolom Action tidak terpotong. */
+@media (min-width: 861px) and (max-width: 1499px) {
+    .table-cards th:nth-child(3), .table-cards td[data-label="Event"] { display: none; }
+}

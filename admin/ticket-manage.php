@@ -350,47 +350,11 @@ $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'
             .card-body, .tier-item { padding: 18px 16px; }
         }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<!-- MOBILE TOPBAR -->
-<div class="topbar">
-    <div class="topbar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab">
-    </div>
-    <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">
-        <span></span><span></span><span></span>
-    </button>
-</div>
-
-<div class="sidebar-overlay" id="sidebarOverlay"></div>
-
-<!-- SIDEBAR -->
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab">
-    </div>
-    <div class="sidebar-menu">
-        <a href="./" class="active">Dashboard</a>
-        <a href="event-add">ADD EVENT</a>
-        <a href="orders">
-            ORDERS
-            <?php if ($pendingOrders > 0): ?>
-            <span class="notif-badge"><?= (int)$pendingOrders ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="resend-email">RESEND EMAIL</a>
-        <a href="scan-tiket">SCAN TICKET</a>
-        <a href="event-edit">EVENT EDIT</a>
-        <a href="report-event">REPORT EVENT</a>
-        <a href="ots-buy">ON THE SPOT TICKET</a>
-        <a href="manage-admin">MANAGE ADMIN</a>
-        <a href="../index-event" target="_blank">SEE PAGE</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">Logout — <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <!-- MAIN -->
 <div class="main">

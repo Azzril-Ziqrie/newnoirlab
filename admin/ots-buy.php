@@ -489,27 +489,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .tiket-result { border: 1px solid #ccc; }
         }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<nav class="sidebar">
-    <div class="sidebar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab">
-    </div>
-    <div class="sidebar-menu">
-        <a href="./">Dashboard</a>
-        <a href="event-add">Tambah Event</a>
-        <a href="orders">Orders</a>
-        <a href="scan-tiket">Scan Tiket</a>
-        <a href="ots-buy" class="active">Beli OTS</a>
-        <a href="manage-admin">Kelola Admin</a>
-        <a href="../index-event" target="_blank">Lihat Halaman ↗</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">Logout — <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <!-- MAIN -->
 <div class="main">

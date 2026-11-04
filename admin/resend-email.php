@@ -138,35 +138,11 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
             .page-header h1 { font-size:1.4rem; }
         }
     </style>
+<?php require_once __DIR__ . '/_shell.php'; adminShellStyles(); ?>
 </head>
 <body>
 
-<div class="mobile-header">
-    <div class="mobile-logo">Noirlab Admin</div>
-    <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-</div>
-<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-        <img src="../assets/logos/logo.png" alt="Noirlab" onerror="this.style.display='none'">
-    </div>
-    <div class="sidebar-menu">
-        <a href="./">Dashboard</a>
-        <a href="event-add">Add Event</a>
-        <a href="orders">
-            Orders
-            <?php if ($pendingCount > 0): ?><span class="notif-badge"><?= (int)$pendingCount ?></span><?php endif; ?>
-        </a>
-        <a href="resend-email" class="active">Resend Email</a>
-        <a href="scan-tiket">Scan Ticket</a>
-        <a href="manage-admin">Manage Admins</a>
-        <a href="../index-event" target="_blank">View Page ↗</a>
-    </div>
-    <div class="sidebar-footer">
-        <a href="./?logout=1">Logout — <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Admin') ?></a>
-    </div>
-</nav>
+<?php require_once __DIR__ . '/_shell.php'; adminShell(); ?>
 
 <div class="main">
     <div class="page-header">
@@ -192,17 +168,17 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
         <div class="table-header"><?= count($orders) ?> confirmed orders<?= count($orders) === 200 ? ' (showing latest 200 — use search)' : '' ?></div>
         <?php if ($orders): ?>
         <div class="table-responsive">
-            <table>
+            <table class="table-cards">
                 <thead>
                     <tr><th>Code</th><th>Buyer</th><th>Event</th><th>Email</th><th>Last send</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($orders as $o): $fid = 'f' . (int)$o['id']; ?>
                     <tr>
-                        <td><span class="order-code"><?= htmlspecialchars($o['order_code']) ?></span></td>
-                        <td><?= htmlspecialchars($o['buyer_name']) ?></td>
-                        <td style="max-width:180px"><?= htmlspecialchars($o['event_title']) ?></td>
-                        <td>
+                        <td data-label="Code"><span class="order-code"><?= htmlspecialchars($o['order_code']) ?></span></td>
+                        <td data-label="Buyer"><?= htmlspecialchars($o['buyer_name']) ?></td>
+                        <td data-label="Event" style="max-width:180px"><?= htmlspecialchars($o['event_title']) ?></td>
+                        <td data-label="Email">
                             <form method="POST" id="<?= $fid ?>" class="row-form">
                                 <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
                                 <input type="hidden" name="id" value="<?= (int)$o['id'] ?>">
@@ -213,7 +189,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
                                        data-original="<?= htmlspecialchars($o['buyer_email']) ?>">
                             </form>
                         </td>
-                        <td style="font-size:.75rem;white-space:nowrap">
+                        <td data-label="Last send" style="font-size:.75rem;white-space:nowrap">
                             <?php if ($o['email_error']): ?>
                                 <span style="color:#900;font-weight:700" title="<?= htmlspecialchars($o['email_error']) ?>">Failed</span>
                             <?php elseif ($o['email_sent_at']): ?>
@@ -222,7 +198,7 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
                                 <span style="color:rgba(0,0,0,0.4)">No record</span>
                             <?php endif; ?>
                         </td>
-                        <td>
+                        <td data-label="Action">
                             <div class="row-form">
                                 <button form="<?= $fid ?>" name="action" value="save" class="btn">Save</button>
                                 <button form="<?= $fid ?>" name="action" value="save_send" class="btn btn-primary"
