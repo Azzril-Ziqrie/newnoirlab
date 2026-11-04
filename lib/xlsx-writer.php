@@ -29,6 +29,16 @@ class XlsxWriter {
     const S_SUBTITLE = 19;
     const S_TOT_BLANK = 20;
 
+    // Gaya klasik berbingkai (judul serif, header abu-abu, semua sel berbingkai hitam)
+    const G_TITLE = 21;
+    const G_NOTE = 22;
+    const G_TH = 23;          // header tabel
+    const G_NAME = 24;        // sel teks rata kiri
+    const G_NUM = 25;         // sel angka rata tengah
+    const G_RED = 26;         // kolom penanda: merah, teks putih tebal
+    const G_TOT_LABEL = 27;
+    const G_TOT_NUM = 28;
+
     private array $sheets = [];
 
     /**
@@ -151,17 +161,25 @@ class XlsxWriter {
             '<font><b/><sz val="13"/><color rgb="FF000000"/><name val="Calibri"/></font>',                   // 4 subtitle
             '<font><b/><sz val="10"/><color rgb="FF000000"/><name val="Consolas"/></font>',                  // 5 code
             '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/></font>',                   // 6 bold
+            '<font><b/><sz val="16"/><color rgb="FF000000"/><name val="Times New Roman"/></font>',           // 7 judul klasik
+            '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="Times New Roman"/></font>',           // 8 header klasik
+            '<font><sz val="10"/><color rgb="FF000000"/><name val="Calibri"/></font>',                       // 9 catatan
+            '<font><sz val="11"/><color rgb="FF000000"/><name val="Times New Roman"/></font>',               // 10 isi klasik
+            '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Times New Roman"/></font>',           // 11 putih tebal
         ];
         $fills = [
             '<fill><patternFill patternType="none"/></fill>',
             '<fill><patternFill patternType="gray125"/></fill>',
             '<fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill>',
+            '<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill>',   // 3 abu-abu
+            '<fill><patternFill patternType="solid"><fgColor rgb="FFFF0000"/><bgColor indexed="64"/></patternFill></fill>',   // 4 merah
         ];
         $borders = [
             '<border><left/><right/><top/><bottom/><diagonal/></border>',
             '<border><left/><right/><top/><bottom style="thin">' . $hair . '</bottom><diagonal/></border>',
             '<border><left/><right/><top/><bottom style="medium">' . $blk . '</bottom><diagonal/></border>',
             '<border><left/><right/><top style="medium">' . $blk . '</top><bottom/><diagonal/></border>',
+            '<border><left style="medium">' . $blk . '</left><right style="medium">' . $blk . '</right><top style="medium">' . $blk . '</top><bottom style="medium">' . $blk . '</bottom><diagonal/></border>',   // 4 kotak hitam
         ];
         $numFmts = [164 => '"Rp "#,##0', 165 => 'd mmm yyyy, hh:mm', 166 => '#,##0'];
 
@@ -188,6 +206,14 @@ class XlsxWriter {
             [164, 6, 0, 3, 'right'],      // 18 total rupiah
             [0, 4, 0, 0, 'left'],         // 19 subtitle
             [0, 0, 0, 3, 'left'],         // 20 total blank
+            [0, 7, 0, 0, 'left'],         // 21 G_TITLE
+            [0, 9, 0, 0, 'left'],         // 22 G_NOTE
+            [0, 8, 3, 4, 'center'],       // 23 G_TH
+            [0, 10, 0, 4, 'left'],        // 24 G_NAME
+            [0, 10, 0, 4, 'center'],      // 25 G_NUM
+            [0, 11, 4, 4, 'center'],      // 26 G_RED
+            [0, 8, 3, 4, 'left'],         // 27 G_TOT_LABEL
+            [0, 8, 3, 4, 'center'],       // 28 G_TOT_NUM
         ];
 
         $x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';

@@ -101,6 +101,57 @@ $pendingTents = array_sum(array_column($pending, 'tents'));
 $pendingMats  = array_sum(array_column($pending, 'mats'));
 $pendingBags  = array_sum(array_column($pending, 'bags'));
 
+if (($_GET['export'] ?? '') === 'xlsx' && $event) {
+    require_once dirname(__DIR__) . '/lib/xlsx-writer.php';
+    $X = 'XlsxWriter';
+    $slug  = trim(preg_replace('/[^a-zA-Z0-9]+/', '-', $event['title']), '-');
+    $bulan = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    $today = (int) date('j') . ' ' . $bulan[(int) date('n')] . ' ' . date('Y');
+    $cols  = array_reverse($sizes);                       // Tent 6, Tent 4, Tent 3 seperti contoh
+    $blank = fn ($n) => $n > 0 ? $n : '';                 // nol dikosongkan supaya tabel mudah dibaca
+
+    // Sheet 1: peserta + tenda
+    $d = [];
+    $d[] = [['PESERTA + TENDA (data ' . $today . ')', $X::G_TITLE]];
+    $d[] = [['Group 3 = tenda kap 4 · Group 5 = tenda kap 6 · tenda saja / add-on = tenda kap 3 · digabung per nama', $X::G_NOTE]];
+    $d[] = [];
+    $h = [['Nama', $X::G_TH], ['Jumlah Tenda', $X::G_TH]];
+    foreach ($cols as $z) $h[] = ["Tent $z", $X::G_TH];
+    $h[] = ['Matras', $X::G_TH]; $h[] = ['SB', $X::G_TH];
+    $d[] = $h;
+    foreach ($people as $p) {
+        $row = [[$p['name'], $X::G_NAME], [array_sum($p['tents']), $X::G_RED]];
+        foreach ($cols as $z) $row[] = [$blank($p['tents'][$z] ?? 0), $X::G_NUM];
+        $row[] = [$blank($p['mats']), $X::G_NUM]; $row[] = [$blank($p['bags']), $X::G_NUM];
+        $d[] = $row;
+    }
+    $t = [['TOTAL', $X::G_TOT_LABEL], [array_sum($tentsBySize), $X::G_TOT_NUM]];
+    foreach ($cols as $z) $t[] = [$tentsBySize[$z], $X::G_TOT_NUM];
+    $t[] = [$mats, $X::G_TOT_NUM]; $t[] = [$bags, $X::G_TOT_NUM];
+    $d[] = $t;
+
+    // Sheet 2: total peralatan
+    $r = [];
+    $r[] = [['Peralatan Total', $X::G_TITLE]];
+    $r[] = [[$event['title'] . ' · order confirmed + sudah masuk · ' . $today, $X::G_NOTE]];
+    $r[] = [];
+    $r[] = [['Item', $X::G_TH], ['Jumlah', $X::G_TH]];
+    foreach ($tentsBySize as $size => $n) $r[] = [["Tenda kap $size", $X::G_NAME], [$n, $X::G_NUM]];
+    $r[] = [['Matras', $X::G_NAME], [$mats, $X::G_NUM]];
+    $r[] = [['Sleeping bag', $X::G_NAME], [$bags, $X::G_NUM]];
+
+    $n = count($cols);
+    $xl = new XlsxWriter();
+    $xl->addSheet('Peserta + Tenda', $d, [
+        'widths' => array_merge([34, 16], array_fill(0, $n + 2, 14)),
+        'rowHeights' => [1 => 28, 4 => 24], 'freeze' => 4, 'landscape' => true,
+    ]);
+    $xl->addSheet('Peralatan Total', $r, ['widths' => [28, 14], 'rowHeights' => [1 => 28, 4 => 24]]);
+    if ($xl->output('Rekap-Peralatan-' . $slug . '-' . date('Ymd') . '.xlsx')) exit;
+    header('Location: gear-recap?event_id=' . $eventId . '&export=csv');   // ext-zip tidak ada → CSV
+    exit;
+}
+
 if (($_GET['export'] ?? '') === 'csv' && $event) {
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: text/csv; charset=utf-8');
@@ -173,7 +224,7 @@ if (($_GET['export'] ?? '') === 'csv' && $event) {
             <option value="<?= (int) $ev['id'] ?>" <?= (int) $ev['id'] === $eventId ? 'selected' : '' ?>><?= htmlspecialchars($ev['title']) ?> — <?= date('d M Y', strtotime($ev['event_date_start'])) ?></option>
             <?php endforeach; ?>
         </select>
-        <?php if ($lines): ?><a class="btn" href="gear-recap?event_id=<?= $eventId ?>&export=csv">Export CSV</a><?php endif; ?>
+        <?php if ($lines): ?><a class="btn btn-primary" href="gear-recap?event_id=<?= $eventId ?>&export=xlsx">Export Excel</a><a class="btn" href="gear-recap?event_id=<?= $eventId ?>&export=csv">CSV polos</a><?php endif; ?>
     </form>
 
     <?php if (!$lines): ?>
