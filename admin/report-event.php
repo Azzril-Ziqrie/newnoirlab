@@ -20,11 +20,10 @@ if ($selectedId) {
             COUNT(*)                                  AS total_order,
             COALESCE(SUM(qty),0)                      AS total_tiket,
             SUM(status='confirmed')                   AS confirmed,
-            SUM(status='pending')                     AS pending,
             SUM(status='used')                        AS used,
             SUM(status='rejected')                    AS rejected,
             COALESCE(SUM(CASE WHEN status IN ('confirmed','used') THEN total_price ELSE 0 END),0) AS revenue
-        FROM orders WHERE event_id = ?
+        FROM orders WHERE event_id = ? AND status <> 'pending'
     ");
     $stats->execute([$selectedId]);
     $stats = $stats->fetch();
@@ -35,7 +34,7 @@ if ($selectedId) {
                COALESCE(SUM(o.qty),0)                 AS tiket_terjual,
                COALESCE(SUM(CASE WHEN o.status IN ('confirmed','used') THEN o.total_price ELSE 0 END),0) AS revenue
         FROM tickets t
-        LEFT JOIN orders o ON t.id = o.ticket_id AND o.event_id = ?
+        LEFT JOIN orders o ON t.id = o.ticket_id AND o.event_id = ? AND o.status <> 'pending'
         WHERE t.event_id = ?
         GROUP BY t.id
         ORDER BY t.price ASC
@@ -46,7 +45,8 @@ if ($selectedId) {
     $filterStatus = $_GET['status'] ?? '';
     $filterSearch = trim($_GET['search'] ?? '');
 
-    $sql    = "SELECT o.*, t.tier_name FROM orders o JOIN tickets t ON o.ticket_id = t.id WHERE o.event_id = ?";
+    // Order pending (belum dibayar) tidak masuk data laporan.
+    $sql    = "SELECT o.*, t.tier_name FROM orders o JOIN tickets t ON o.ticket_id = t.id WHERE o.event_id = ? AND o.status <> 'pending'";
     $params = [$selectedId];
 
     if ($filterStatus) { $sql .= " AND o.status = ?"; $params[] = $filterStatus; }
@@ -55,7 +55,8 @@ if ($selectedId) {
         $params[] = "%$filterSearch%"; $params[] = "%$filterSearch%"; $params[] = "%$filterSearch%";
     }
 
-    $sql .= " ORDER BY o.created_at DESC";
+    $filterSort = ($_GET['sort'] ?? '') === 'tier' ? 'tier' : 'newest';
+    $sql .= $filterSort === 'tier' ? " ORDER BY t.price ASC, t.id ASC, o.created_at DESC" : " ORDER BY o.created_at DESC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $orders = $stmt->fetchAll();
@@ -105,7 +106,7 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
     $tgl = function ($ts, $jam = false) use ($bulan) {
         return (int) date('j', $ts) . ' ' . $bulan[(int) date('n', $ts)] . ' ' . date('Y', $ts) . ($jam ? ', ' . date('H:i', $ts) : '');
     };
-    $statusLabel = ['confirmed' => 'Confirmed', 'used' => 'Sudah Masuk', 'pending' => 'Pending', 'rejected' => 'Rejected'];
+    $statusLabel = ['confirmed' => 'Confirmed', 'used' => 'Sudah Masuk', 'rejected' => 'Rejected'];
     $payLabel = function ($m) {
         $m = (string) $m;
         if ($m === '') return '–';
@@ -141,6 +142,7 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
     $filterNote = [];
     if ($filterStatus) $filterNote[] = 'Status: ' . ($statusLabel[$filterStatus] ?? $filterStatus);
     if ($filterSearch) $filterNote[] = 'Pencarian: "' . $filterSearch . '"';
+    if ($filterSort === 'tier') $filterNote[] = 'Urut: tier';
     $filterNote = $filterNote ? implode(' · ', $filterNote) : 'Semua order';
 
     // Total dari order yang diexport (hanya confirmed + used yang dihitung sebagai terjual)
@@ -236,7 +238,6 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
         ['Total Order',    (int) $stats['total_order'],  $X::S_VAL_INT],
         ['Confirmed',      (int) $stats['confirmed'],    $X::S_VAL_INT],
         ['Sudah Masuk',    (int) $stats['used'],         $X::S_VAL_INT],
-        ['Pending',        (int) $stats['pending'],      $X::S_VAL_INT],
         ['Rejected',       (int) $stats['rejected'],     $X::S_VAL_INT],
         ['Tiket Terjual',  $soldAll,                     $X::S_VAL_INT],
         ['Pendapatan',     (int) $stats['revenue'],      $X::S_VAL_RUPIAH],
@@ -378,7 +379,8 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
         // ext-zip tidak ada → jatuh ke CSV
         header('Location: report-event?event_id=' . $selectedId . '&export=csv'
             . ($filterStatus ? '&status=' . urlencode($filterStatus) : '')
-            . ($filterSearch ? '&search=' . urlencode($filterSearch) : ''));
+            . ($filterSearch ? '&search=' . urlencode($filterSearch) : '')
+            . ($filterSort === 'tier' ? '&sort=tier' : ''));
     }
     exit;
 }
@@ -557,7 +559,7 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
         /* --- STATS GRID --- */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 0;
             margin-bottom: 28px;
             border: 1px solid #e5e5e5;
@@ -879,10 +881,6 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
             <div class="stat-box-val"><?= $stats['used'] ?></div>
         </div>
         <div class="stat-box">
-            <div class="stat-box-label">Pending</div>
-            <div class="stat-box-val"><?= $stats['pending'] ?></div>
-        </div>
-        <div class="stat-box">
             <div class="stat-box-label">Rejected</div>
             <div class="stat-box-val"><?= $stats['rejected'] ?></div>
         </div>
@@ -928,10 +926,13 @@ if (isset($_GET['export']) && in_array($_GET['export'], ['xlsx', 'csv'], true) &
                 <option value="">Semua Status</option>
                 <option value="confirmed" <?= ($_GET['status'] ?? '') === 'confirmed' ? 'selected' : '' ?>>Confirmed</option>
                 <option value="used"      <?= ($_GET['status'] ?? '') === 'used'      ? 'selected' : '' ?>>Used</option>
-                <option value="pending"   <?= ($_GET['status'] ?? '') === 'pending'   ? 'selected' : '' ?>>Pending</option>
                 <option value="rejected"  <?= ($_GET['status'] ?? '') === 'rejected'  ? 'selected' : '' ?>>Rejected</option>
             </select>
-            <?php $exportQs = (!empty($_GET['status']) ? '&status='.urlencode($_GET['status']) : '') . (!empty($_GET['search']) ? '&search='.urlencode($_GET['search']) : ''); ?>
+            <select name="sort" class="filter-select" onchange="this.form.submit()">
+                <option value="newest" <?= $filterSort === 'newest' ? 'selected' : '' ?>>Urut: Terbaru</option>
+                <option value="tier"   <?= $filterSort === 'tier'   ? 'selected' : '' ?>>Urut: Tier</option>
+            </select>
+            <?php $exportQs = (!empty($_GET['status']) ? '&status='.urlencode($_GET['status']) : '') . (!empty($_GET['search']) ? '&search='.urlencode($_GET['search']) : '') . ($filterSort === 'tier' ? '&sort=tier' : ''); ?>
             <a href="report-event?event_id=<?= $selectedId ?>&export=xlsx<?= $exportQs ?>" class="btn-export">Export Excel</a>
             <a href="report-event?event_id=<?= $selectedId ?>&export=csv<?= $exportQs ?>" class="btn-export">CSV</a>
             <span class="result-count"><?= count($orders) ?> data</span>

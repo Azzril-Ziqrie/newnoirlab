@@ -82,30 +82,46 @@ foreach ($events as $ev) if ((int) $ev['id'] === $eventId) $event = $ev;
 $lines   = $event ? gearLines($pdo, $eventId, ['confirmed', 'used']) : [];
 $pending = $event ? gearLines($pdo, $eventId, ['pending']) : [];
 
-$tentsBySize = []; $mats = 0; $bags = 0;
-$bySource = []; $people = [];
-foreach ($lines as $l) {
-    $tentsBySize[$l['size']] = ($tentsBySize[$l['size']] ?? 0) + $l['tents'];
-    $mats += $l['mats']; $bags += $l['bags'];
+/**
+ * Rangkum baris peralatan: total tenda/matras/sleeping bag, rincian per paket, dan per pembeli.
+ * "orders" dihitung per order unik (satu order bisa punya baris tier + add-on), bukan per baris.
+ */
+function summarizeGear(array $lines): array
+{
+    $sum = ['tentsBySize' => [], 'mats' => 0, 'bags' => 0, 'bySource' => [], 'people' => [], 'orderIds' => []];
+    foreach ($lines as $l) {
+        $orderId = (int) $l['order']['id'];
+        $sum['tentsBySize'][$l['size']] = ($sum['tentsBySize'][$l['size']] ?? 0) + $l['tents'];
+        $sum['mats'] += $l['mats'];
+        $sum['bags'] += $l['bags'];
+        $sum['orderIds'][$orderId] = true;
 
-    $s = &$bySource[$l['source']];
-    $s ??= ['orders' => 0, 'qty' => 0, 'tents' => [], 'mats' => 0, 'bags' => 0];
-    $s['orders']++; $s['qty'] += $l['qty'];
-    $s['tents'][$l['size']] = ($s['tents'][$l['size']] ?? 0) + $l['tents'];
-    $s['mats'] += $l['mats']; $s['bags'] += $l['bags'];
-    unset($s);
+        $s = &$sum['bySource'][$l['source']];
+        $s ??= ['orderIds' => [], 'qty' => 0, 'tents' => [], 'mats' => 0, 'bags' => 0];
+        $s['orderIds'][$orderId] = true;
+        $s['qty'] += $l['qty'];
+        $s['tents'][$l['size']] = ($s['tents'][$l['size']] ?? 0) + $l['tents'];
+        $s['mats'] += $l['mats'];
+        $s['bags'] += $l['bags'];
+        unset($s);
 
-    // Gabung per nama pembeli (huruf besar/kecil dan spasi ganda diabaikan)
-    $key = mb_strtolower(preg_replace('/\s+/u', ' ', trim($l['order']['buyer_name'])), 'UTF-8');
-    $p = &$people[$key];
-    $p ??= ['name' => trim($l['order']['buyer_name']), 'tents' => [], 'mats' => 0, 'bags' => 0, 'codes' => []];
-    $p['tents'][$l['size']] = ($p['tents'][$l['size']] ?? 0) + $l['tents'];
-    $p['mats'] += $l['mats']; $p['bags'] += $l['bags'];
-    $p['codes'][$l['order']['order_code']] = true;
-    unset($p);
+        // Gabung per nama pembeli (huruf besar/kecil dan spasi ganda diabaikan)
+        $key = mb_strtolower(preg_replace('/\s+/u', ' ', trim($l['order']['buyer_name'])), 'UTF-8');
+        $p = &$sum['people'][$key];
+        $p ??= ['name' => trim($l['order']['buyer_name']), 'tents' => [], 'mats' => 0, 'bags' => 0, 'codes' => []];
+        $p['tents'][$l['size']] = ($p['tents'][$l['size']] ?? 0) + $l['tents'];
+        $p['mats'] += $l['mats'];
+        $p['bags'] += $l['bags'];
+        $p['codes'][$l['order']['order_code']] = true;
+        unset($p);
+    }
+    ksort($sum['tentsBySize']);
+    uasort($sum['people'], fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+    return $sum;
 }
-ksort($tentsBySize);
-uasort($people, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+
+['tentsBySize' => $tentsBySize, 'mats' => $mats, 'bags' => $bags, 'bySource' => $bySource,
+ 'people' => $people, 'orderIds' => $orderIds] = summarizeGear($lines);
 $sizes = array_keys($tentsBySize);
 
 $pendingTents = array_sum(array_column($pending, 'tents'));
@@ -256,17 +272,17 @@ if (($_GET['export'] ?? '') === 'csv' && $event) {
     <h2>Per paket</h2>
     <div class="card">
         <table>
-            <thead><tr><th>Paket</th><th class="n">Order</th><th class="n">Jumlah</th>
+            <thead><tr><th>Paket</th><th class="n">Order</th><th class="n">Qty</th>
                 <?php foreach ($sizes as $s): ?><th class="n">Tenda kap <?= $s ?></th><?php endforeach; ?>
                 <th class="n">Matras</th><th class="n">Sleeping bag</th></tr></thead>
             <tbody>
             <?php foreach ($bySource as $name => $s): ?>
-                <tr><td><?= htmlspecialchars($name) ?></td><td class="n"><?= $s['orders'] ?></td><td class="n"><?= $s['qty'] ?></td>
+                <tr><td><?= htmlspecialchars($name) ?></td><td class="n"><?= count($s['orderIds']) ?></td><td class="n"><?= $s['qty'] ?></td>
                     <?php foreach ($sizes as $z): ?><td class="n"><?= $s['tents'][$z] ?? 0 ?></td><?php endforeach; ?>
                     <td class="n"><?= $s['mats'] ?></td><td class="n"><?= $s['bags'] ?></td></tr>
             <?php endforeach; ?>
             </tbody>
-            <tfoot><tr><td>Total</td><td class="n"><?= array_sum(array_column($bySource, 'orders')) ?></td><td class="n"><?= array_sum(array_column($bySource, 'qty')) ?></td>
+            <tfoot><tr><td>Total</td><td class="n"><?= count($orderIds) ?></td><td class="n"><?= array_sum(array_column($bySource, 'qty')) ?></td>
                 <?php foreach ($sizes as $z): ?><td class="n"><?= $tentsBySize[$z] ?></td><?php endforeach; ?>
                 <td class="n"><?= $mats ?></td><td class="n"><?= $bags ?></td></tr></tfoot>
         </table>
