@@ -3,6 +3,8 @@ require_once 'auth.php';
 require_once '../config/config.php';
 $pdo = getDBConnection();
 
+const OTS_PLACEHOLDER_EMAIL = 'ots@noirlab.id';
+
 $events  = $pdo->query("SELECT * FROM events WHERE status='upcoming' ORDER BY event_date_start ASC")->fetchAll();
 $message = null;
 $newOrder = null;
@@ -11,32 +13,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $eventId   = (int) $_POST['event_id'];
     $ticketId  = (int) $_POST['ticket_id'];
     $name      = trim($_POST['buyer_name']);
-    $email     = trim($_POST['buyer_email'] ?: 'ots@noirlab.id');
+    $email     = trim($_POST['buyer_email'] ?: OTS_PLACEHOLDER_EMAIL);
     $phone     = trim($_POST['buyer_phone'] ?: '-');
     $qty       = max(1, (int) $_POST['qty']);
     $payMethod = $_POST['pay_method'];
 
-    $ticket = $pdo->prepare("SELECT * FROM tickets WHERE id = ? AND event_id = ?");
-    $ticket->execute([$ticketId, $eventId]);
-    $ticket = $ticket->fetch();
+    // Email asli (bukan placeholder OTS) → e-ticket bisa dikirim
+    $realEmail = filter_var($email, FILTER_VALIDATE_EMAIL) && $email !== OTS_PLACEHOLDER_EMAIL;
+    $sendMail  = $realEmail && !empty($_POST['send_email']);
 
-    if (!$ticket) {
-        $message = ['type' => 'error', 'text' => 'Tiket tidak ditemukan.'];
-    } elseif ($ticket['quota'] - $ticket['sold'] < $qty) {
-        $message = ['type' => 'error', 'text' => 'Kuota tidak cukup. Sisa: ' . ($ticket['quota'] - $ticket['sold'])];
-    } else {
-        $total     = $ticket['price'] * $qty;
-        $orderCode = 'NL-' . strtoupper(substr(md5(uniqid()), 0, 6));
+    try {
+        $pdo->beginTransaction();
+
+        $ticket = $pdo->prepare("SELECT * FROM tickets WHERE id = ? AND event_id = ? FOR UPDATE");
+        $ticket->execute([$ticketId, $eventId]);
+        $ticket = $ticket->fetch();
+
+        if (!$ticket) {
+            throw new RuntimeException('Tiket tidak ditemukan.');
+        }
+        if ($ticket['quota'] - $ticket['sold'] < $qty) {
+            throw new RuntimeException('Kuota tidak cukup. Sisa: ' . max(0, $ticket['quota'] - $ticket['sold']));
+        }
+
+        $price     = (int) $ticket['price'];
+        $total     = $price * $qty;
+        $orderCode = 'NL-' . strtoupper(substr(md5(uniqid('', true)), 0, 6));
 
         $pdo->prepare("
             INSERT INTO orders
               (order_code, event_id, ticket_id, buyer_name, buyer_email, buyer_phone,
-               qty, total_price, status, payment_method, confirmed_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, NOW(), NOW())
-        ")->execute([$orderCode, $eventId, $ticketId, $name, $email, $phone, $qty, $total, $payMethod]);
+               qty, price_per_ticket, total_price, status, payment_method, confirmed_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, NOW(), NOW())
+        ")->execute([$orderCode, $eventId, $ticketId, $name, $email, $phone, $qty, $price, $total, $payMethod]);
+        $orderId = (int) $pdo->lastInsertId();
 
         $pdo->prepare("UPDATE tickets SET sold = sold + ? WHERE id = ?")->execute([$qty, $ticketId]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $message = ['type' => 'error', 'text' => $e instanceof RuntimeException ? $e->getMessage() : 'Gagal menyimpan order.'];
+    }
 
+    if (isset($orderId) && !$message) {
         $newOrder = [
             'order_code'  => $orderCode,
             'buyer_name'  => $name,
@@ -46,6 +65,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pay_method'  => $payMethod,
         ];
         $message = ['type' => 'success', 'text' => 'Tiket OTS berhasil dibuat.'];
+
+        if ($sendMail) {
+            require_once 'send-ticket-email.php';
+            $result = sendTicketEmail($pdo, $orderId);
+            if ($result['success']) {
+                $message['text'] .= ' E-ticket terkirim ke ' . $email . '.';
+            } else {
+                $message = ['type' => 'error', 'text' => 'Tiket dibuat, tapi email GAGAL terkirim: ' . $result['error']
+                    . ' (kirim ulang dari menu Resend Email atau Orders).'];
+            }
+        }
     }
 }
 ?>
@@ -557,6 +587,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="text" name="buyer_phone" placeholder="08xx..."
                                value="<?= htmlspecialchars($_POST['buyer_phone'] ?? '') ?>">
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-weight:500;font-size:.85rem;color:#000;cursor:pointer">
+                        <input type="checkbox" name="send_email" value="1" checked style="width:auto">
+                        Kirim e-ticket ke email (hanya jika email diisi)
+                    </label>
                 </div>
 
                 <div class="form-group">
