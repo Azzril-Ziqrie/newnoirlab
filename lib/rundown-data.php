@@ -1,15 +1,17 @@
 <?php
 /**
- * Rundown Bonafest '26, diambil dari RUNDOWN BONAFEST 2026 (1).xlsx (versi fix).
+ * Rundown Bonafest '26, diambil dari RUNDOWN BONAFEST 2026 (2).xlsx (versi fix).
  * Format baris: [mulai, selesai, judul, area]. Urut menurut jam mulai.
- * Baris internal produksi (check sound, changeover, playback, clear area, off) tidak dimuat.
+ * Baris internal produksi (check sound, changeover, playback, clear area, off, gate) tidak dimuat.
+ * Day 2 dibaca dari sheet "DAY2" (bagian Day 2 di sheet "DAY 1" adalah salinan lama).
+ * Opener dan ISOMA berlaku untuk semua area, jadi areanya "All areas" (tampil di setiap tab timetable).
  */
 return [
     'day1' => [
         ['15:00', '15:15', 'BONA FEST OPENER BUMPER/ GREETING, SAFETY AND REGULATION ANNOUNCEMENT', 'All areas'],
         ['15:15', '16:45', 'BLIND.DOGS', 'Community Lounge'],
         ['15:15', '17:00', 'WORKSHOP COLLAGRAPH WITH JABON', 'Community Lounge'],
-        ['16:00', '16:45', 'W_MUSIC', 'Beledag Stage'],
+        ['16:00', '16:45', 'MAHA', 'Beledag Stage'],
         ['16:45', '17:45', 'NOIRLAB', 'Beledag Stage'],
         ['16:45', '17:45', 'PROJECT PRESENTATION BY JATIWANGI ART FACTORY', 'Community Lounge'],
         ['17:45', '18:30', 'ISOMA', 'All areas'],
@@ -21,7 +23,7 @@ return [
         ['21:45', '22:45', 'NOBAR FILM PERJALANAN OMAH JDT', 'Community Lounge'],
         ['22:45', '23:45', 'RAIN TEMPO', 'Beledag Stage'],
         ['22:45', '23:45', 'NOBAR FILM SUKAJAYAMELAWAN', 'Community Lounge'],
-        ['23:45', '00:45', 'HI(GH)HAT', 'Beledag Stage'],
+        ['23:45', '00:45', 'HIGH(H)AT', 'Beledag Stage'],
         ['23:45', '00:15', 'NOBAR FILM KOALISI SENI', 'Community Lounge'],
         ['00:45', '02:00', 'VERDY ARIEN', 'Beledag Stage'],
     ],
@@ -30,7 +32,7 @@ return [
         ['05:30', '07:00', 'SUKU KAKI BY OMAHJANGANDIAMTERUS', 'Community Lounge'],
         ['06:00', '07:00', 'ZAKIWHY', 'Beledag Stage'],
         ['07:00', '08:30', 'YOGA MEDITATION', 'Bona Stage'],
-        ['07:00', '08:00', 'MAHA', 'Beledag Stage'],
+        ['07:00', '08:00', 'W_MUSIC', 'Beledag Stage'],
         ['08:00', '09:00', 'JIPX', 'Beledag Stage'],
         ['08:30', '10:00', 'WORKSHOP TANAMAN WITH ALPHAN', 'Community Lounge'],
         ['09:00', '10:00', 'NIFTY', 'Beledag Stage'],

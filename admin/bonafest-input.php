@@ -52,9 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$ticket) {
                 throw new RuntimeException('Tier tiket tidak ditemukan.');
             }
-            $sisa = $ticket['quota'] - $ticket['sold'];
-            if ($sisa < $qty) {
-                throw new RuntimeException('Kuota tidak cukup. Sisa: ' . max(0, $sisa));
+            // Tiket manual tetap bisa dibuat walau tier sudah sold out: kuota otomatis ditambah dari stok.
+            $quotaAdded = max(0, $qty - ($ticket['quota'] - $ticket['sold']));
+            if ($quotaAdded > 0) {
+                $pdo->prepare("UPDATE tickets SET quota = quota + ? WHERE id = ?")->execute([$quotaAdded, $ticketId]);
             }
 
             $price     = $payMethod === 'invitation' ? 0 : (int) $ticket['price'];
@@ -76,7 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'order_code' => $orderCode, 'buyer_name' => $name, 'buyer_email' => $email,
                 'tier_name' => $ticket['tier_name'], 'qty' => $qty, 'total' => $total,
             ];
-            $message = ['ok', 'Tiket BONAFEST berhasil dibuat.'];
+            $message = ['ok', 'Tiket BONAFEST berhasil dibuat.'
+                . ($quotaAdded > 0 ? ' Tier sudah sold out, kuota ditambah ' . $quotaAdded . ' dari stok.' : '')];
 
             if ($sendMail) {
                 require_once 'send-ticket-email.php';
