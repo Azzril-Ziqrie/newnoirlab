@@ -706,8 +706,9 @@ function loadTickets(eventId) {
         const opt  = document.createElement('option');
         opt.value  = t.id;
         opt.dataset.price = t.price;
-        opt.textContent = `${t.tier_name} — Rp ${Number(t.price).toLocaleString('id-ID')} (sisa: ${sisa})`;
-        if (sisa <= 0) { opt.disabled = true; opt.textContent += ' — HABIS'; }
+        opt.textContent = `${t.tier_name} — Rp ${Number(t.price).toLocaleString('id-ID')} (sisa: ${Math.max(0, sisa)})`;
+        // Tier habis tetap bisa dipilih: kuota otomatis ditambah dari stok saat tiket manual dibuat.
+        if (sisa <= 0) opt.textContent += ' — HABIS (kuota ditambah otomatis)';
         sel.appendChild(opt);
     });
 }

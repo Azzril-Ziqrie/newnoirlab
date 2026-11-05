@@ -192,9 +192,9 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
                         <option value="">— Pilih Tier —</option>
                         <?php foreach ($tiers as $t):
                             $sisa = $t['quota'] - $t['sold']; ?>
-                            <option value="<?= (int) $t['id'] ?>" <?= $sisa <= 0 ? 'disabled' : '' ?>
+                            <option value="<?= (int) $t['id'] ?>"
                                 <?= (int) ($_POST['ticket_id'] ?? 0) === (int) $t['id'] && !$newOrder ? 'selected' : '' ?>>
-                                <?= $h($t['tier_name']) ?> — Rp <?= number_format($t['price'], 0, ',', '.') ?> (sisa: <?= max(0, $sisa) ?>)<?= $sisa <= 0 ? ' — HABIS' : '' ?>
+                                <?= $h($t['tier_name']) ?> — Rp <?= number_format($t['price'], 0, ',', '.') ?> (sisa: <?= max(0, $sisa) ?>)<?= $sisa <= 0 ? ' — HABIS (kuota ditambah otomatis)' : '' ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
