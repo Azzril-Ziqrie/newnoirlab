@@ -32,6 +32,7 @@ function ensureAddonTables(PDO $pdo): void
             INDEX (order_id)
         )
     ");
+    fixBonafestGroup3Tier($pdo);
     $done = true;
 }
 
@@ -75,4 +76,22 @@ function resolveAddonSelection(PDO $pdo, int $ticketId, $raw): array
         ];
     }
     return $out;
+}
+
+
+/**
+ * Koreksi sekali pakai: isi paket Group 3 BONAFEST (poster: tenda kap 4, 2 matras, 2 sleeping bag).
+ * Hanya menyentuh baris yang namanya masih versi lama persis, jadi setelah terkoreksi tidak ada efek lagi.
+ * Gagal pun tidak boleh mengganggu situs. Dipanggil dari ensureAddonTables (dipakai halaman tiket dan admin). Hapus fungsi ini dan pemanggilnya kalau sudah tidak perlu.
+ */
+function fixBonafestGroup3Tier(PDO $pdo): void
+{
+    try {
+        $pdo->prepare("UPDATE tickets SET tier_name = ? WHERE tier_name = ?")->execute([
+            'GROUP 3 PERSON. Include 4-person tent, 2 mats & 2 sleeping bags',
+            'GROUP 3 PERSON. Include 4-person tent, 3 mats & 3 sleeping bags',
+        ]);
+    } catch (Throwable $e) {
+        // diabaikan
+    }
 }

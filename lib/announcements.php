@@ -17,26 +17,36 @@ require_once __DIR__ . '/addons.php';
 const ANNOUNCE_WA_DISPLAY = '0895386847552';
 const ANNOUNCE_WA_URL     = 'https://wa.me/62895386847552';
 const ANNOUNCE_COLUMN = 'group_closed_sent_at';
+const CORRECTION_COLUMN = 'group3_correction_sent_at';
+const ANNOUNCE_TYPES = ['announce', 'correction'];
 
-function ensureAnnounceColumn(PDO $pdo): void
+function announceColumn(string $type): string
 {
-    if (!$pdo->query("SHOW COLUMNS FROM orders LIKE '" . ANNOUNCE_COLUMN . "'")->fetch()) {
-        $pdo->exec('ALTER TABLE orders ADD COLUMN ' . ANNOUNCE_COLUMN . ' DATETIME NULL');
+    return $type === 'correction' ? CORRECTION_COLUMN : ANNOUNCE_COLUMN;
+}
+
+function ensureAnnounceColumn(PDO $pdo, string $type = 'announce'): void
+{
+    $column = announceColumn($type);
+    if (!$pdo->query("SHOW COLUMNS FROM orders LIKE '" . $column . "'")->fetch()) {
+        $pdo->exec('ALTER TABLE orders ADD COLUMN ' . $column . ' DATETIME NULL');
     }
 }
 
 /** Order terkonfirmasi pada satu event; $onlyUnsent=true membuang yang sudah dikirimi. */
-function fetchOrdersToAnnounce(PDO $pdo, int $eventId, bool $onlyUnsent): array
+function fetchOrdersToAnnounce(PDO $pdo, int $eventId, bool $onlyUnsent, string $type = 'announce'): array
 {
-    ensureAnnounceColumn($pdo);
-    $unsent = $onlyUnsent ? 'AND o.' . ANNOUNCE_COLUMN . ' IS NULL' : '';
+    ensureAnnounceColumn($pdo, $type);
+    $unsent = $onlyUnsent ? 'AND o.' . announceColumn($type) . ' IS NULL' : '';
+    // Koreksi hanya untuk pembeli paket Group 3.
+    $onlyGroup3 = $type === 'correction' ? "AND t.tier_name LIKE 'GROUP 3%'" : '';
     $stmt = $pdo->prepare("
         SELECT o.id, o.order_code, o.buyer_name, o.buyer_email, o.qty, o.total_price,
                t.tier_name, e.id AS event_id, e.title, e.event_date_start, e.location, e.city
         FROM orders o
         JOIN events  e ON e.id = o.event_id
         JOIN tickets t ON t.id = o.ticket_id
-        WHERE o.status = 'confirmed' AND e.id = ? $unsent
+        WHERE o.status = 'confirmed' AND e.id = ? $unsent $onlyGroup3
         ORDER BY o.buyer_email, o.id
     ");
     $stmt->execute([$eventId]);
@@ -47,8 +57,11 @@ function fetchOrdersToAnnounce(PDO $pdo, int $eventId, bool $onlyUnsent): array
     return $orders;
 }
 
-function announceSubject(array $group): string
+function announceSubject(array $group, string $type = 'announce'): string
 {
+    if ($type === 'correction') {
+        return 'Correction to your Group 3 package details (' . $group['event']['title'] . ')';
+    }
     return 'Thank you: group tickets are now closed (' . $group['event']['title'] . ')';
 }
 
@@ -73,8 +86,48 @@ function announceOrderBlock(array $order): string
         . '</table>';
 }
 
-function announceHtml(array $group, bool $hasLogo): string
+function correctionHtml(array $group, bool $hasLogo): string
 {
+    $event = $group['event'];
+    $date  = date('l, F j, Y', strtotime($event['event_date_start']));
+    $logo  = $hasLogo ? 'cid:nllogo' : 'https://noirlabcollective.com/assets/logos/logo.png';
+    $codes = implode(', ', array_map(fn ($o) => htmlspecialchars($o['order_code']), $group['orders']));
+
+    return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Package correction</title></head>'
+        . '<body style="margin:0;padding:0;background:#f5f5f5;font-family:\'Helvetica Neue\',Helvetica,Arial,sans-serif;">'
+        . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 12px;"><tr><td align="center">'
+        . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;max-width:580px;border:1px solid #e0e0e0;">'
+        . '<tr><td style="padding:32px 28px;border-bottom:1px solid #000000;"><table width="100%" cellpadding="0" cellspacing="0"><tr>'
+        . '<td><img src="' . $logo . '" alt="NOIRLAB COLLECTIVE" height="56" style="display:block;height:56px;width:auto;"></td>'
+        . '<td style="text-align:right;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#000000;">Correction</td>'
+        . '</tr></table></td></tr>'
+        . '<tr><td style="padding:36px 28px 8px;">'
+        . '<p style="font-size:15px;font-weight:700;color:#000000;margin:0 0 12px;">Hello, ' . htmlspecialchars($group['name']) . '</p>'
+        . '<p style="font-size:13px;line-height:1.8;color:#333333;margin:0 0 12px;">Thank you for buying a Group 3 ticket for <strong style="color:#000000;">' . htmlspecialchars($event['title']) . '</strong>. We are sorry: there was a mistake in the package description on our ticket page.</p>'
+        . '<p style="font-size:13px;line-height:1.8;color:#333333;margin:0 0 12px;">The page said the Group 3 package includes a 4-person tent, 3 mats, and 3 sleeping bags. The correct contents are a <strong style="color:#000000;">4-person tent, 2 mats, and 2 sleeping bags</strong>, as shown on the official poster.</p>'
+        . '<p style="font-size:13px;line-height:1.8;color:#333333;margin:0;">Your ticket and price are unchanged, and your ticket remains valid (' . $codes . ').</p>'
+        . '</td></tr>'
+        . '<tr><td style="padding:24px 28px 28px;"><table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #000000;border-top:3px solid #000000;"><tr><td style="padding:18px 22px;font-size:13px;line-height:1.9;color:#333333;">'
+        . '<strong style="color:#000000;">' . htmlspecialchars($date) . '</strong><br>' . htmlspecialchars($event['location'] . ', ' . $event['city']) . '<br>'
+        . 'Questions? Chat us on WhatsApp <a href="' . ANNOUNCE_WA_URL . '" style="color:#000000;font-weight:700;">' . ANNOUNCE_WA_DISPLAY . '</a> with your ticket code.'
+        . '</td></tr></table></td></tr>'
+        . '<tr><td style="padding:20px 28px;border-top:1px solid #000000;text-align:center;"><p style="font-size:11px;color:#aaaaaa;margin:0;">&copy; ' . date('Y') . ' Noirlab Collective</p></td></tr>'
+        . '</table></td></tr></table></body></html>';
+}
+
+function correctionPlainText(array $group): string
+{
+    $codes = implode(', ', array_column($group['orders'], 'order_code'));
+    return implode("\n", ["Hello, {$group['name']}", '',
+        "Thank you for buying a Group 3 ticket for {$group['event']['title']}. We are sorry: there was a mistake in the package description on our ticket page.",
+        'The page said the Group 3 package includes a 4-person tent, 3 mats, and 3 sleeping bags. The correct contents are a 4-person tent, 2 mats, and 2 sleeping bags, as shown on the official poster.',
+        "Your ticket and price are unchanged, and your ticket remains valid ($codes).", '',
+        'Questions? Chat us on WhatsApp ' . ANNOUNCE_WA_DISPLAY . ' (' . ANNOUNCE_WA_URL . ') with your ticket code.']);
+}
+
+function announceHtml(array $group, bool $hasLogo, string $type = 'announce'): string
+{
+    if ($type === 'correction') return correctionHtml($group, $hasLogo);
     $event = $group['event'];
     $date  = date('l, F j, Y', strtotime($event['event_date_start']));
     $logo  = $hasLogo ? 'cid:nllogo' : 'https://noirlabcollective.com/assets/logos/logo.png';
@@ -107,8 +160,9 @@ function announceHtml(array $group, bool $hasLogo): string
         . '</table></td></tr></table></body></html>';
 }
 
-function announcePlainText(array $group): string
+function announcePlainText(array $group, string $type = 'announce'): string
 {
+    if ($type === 'correction') return correctionPlainText($group);
     $lines = ["Hello, {$group['name']}", '',
         "Thank you for being part of {$group['event']['title']}. Group ticket sales are now closed.",
         'Here is the ticket data you have booked:', ''];
@@ -124,7 +178,7 @@ function announcePlainText(array $group): string
     return implode("\n", $lines);
 }
 
-function buildAnnounceMail(array $group, string $to): PHPMailer
+function buildAnnounceMail(array $group, string $to, string $type = 'announce'): PHPMailer
 {
     $hasLogo = is_file(REMINDER_LOGO_PATH);
     $mail = new PHPMailer(true);
@@ -146,26 +200,26 @@ function buildAnnounceMail(array $group, string $to): PHPMailer
         $mail->addEmbeddedImage(REMINDER_LOGO_PATH, 'nllogo', 'logo.png', 'base64', 'image/png');
     }
     $mail->isHTML(true);
-    $mail->Subject = announceSubject($group);
-    $mail->Body    = announceHtml($group, $hasLogo);
-    $mail->AltBody = announcePlainText($group);
+    $mail->Subject = announceSubject($group, $type);
+    $mail->Body    = announceHtml($group, $hasLogo, $type);
+    $mail->AltBody = announcePlainText($group, $type);
     return $mail;
 }
 
 /** Kirim satu pengumuman. Mengembalikan null bila berhasil, atau pesan galat. */
-function sendAnnouncement(array $group, ?string $overrideTo = null): ?string
+function sendAnnouncement(array $group, ?string $overrideTo = null, string $type = 'announce'): ?string
 {
     try {
-        buildAnnounceMail($group, $overrideTo ?? $group['email'])->send();
+        buildAnnounceMail($group, $overrideTo ?? $group['email'], $type)->send();
         return null;
     } catch (Exception $error) {
         return $error->getMessage();
     }
 }
 
-function markOrdersAnnounced(PDO $pdo, array $orders): void
+function markOrdersAnnounced(PDO $pdo, array $orders, string $type = 'announce'): void
 {
     $ids = array_column($orders, 'id');
     $marks = implode(',', array_fill(0, count($ids), '?'));
-    $pdo->prepare('UPDATE orders SET ' . ANNOUNCE_COLUMN . " = NOW() WHERE id IN ($marks)")->execute($ids);
+    $pdo->prepare('UPDATE orders SET ' . announceColumn($type) . " = NOW() WHERE id IN ($marks)")->execute($ids);
 }

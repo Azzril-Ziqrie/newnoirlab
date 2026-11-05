@@ -25,13 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     @set_time_limit(120);
     $eventId = (int) ($_POST['event'] ?? 0);
     $action  = $_POST['action'] ?? '';
-    $groups  = groupOrdersByRecipient(fetchOrdersToAnnounce($pdo, $eventId, true));
+    $type    = in_array($_POST['type'] ?? '', ANNOUNCE_TYPES, true) ? $_POST['type'] : 'announce';
+    $groups  = groupOrdersByRecipient(fetchOrdersToAnnounce($pdo, $eventId, true, $type));
 
     if ($action === 'test') {
         $to = trim($_POST['to'] ?? '');
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) jsonOut(['ok' => false, 'error' => 'Invalid test email.']);
         if (!$groups) jsonOut(['ok' => false, 'error' => 'No recipients left to use as a sample.']);
-        $error = sendAnnouncement($groups[0], $to);
+        $error = sendAnnouncement($groups[0], $to, $type);
         jsonOut(['ok' => $error === null, 'error' => $error]);
     }
 
@@ -39,9 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sent = 0;
         $failed = [];
         foreach (array_slice($groups, 0, ANNOUNCE_BATCH_SIZE) as $group) {
-            $error = sendAnnouncement($group);
+            $error = sendAnnouncement($group, null, $type);
             if ($error === null) {
-                markOrdersAnnounced($pdo, $group['orders']);
+                markOrdersAnnounced($pdo, $group['orders'], $type);
                 $sent++;
             } else {
                 // Tandai tidak dikirim agar tidak diulang tanpa henti di run ini.
@@ -62,14 +63,14 @@ $events = $pdo->query("
     GROUP BY e.id, e.title ORDER BY e.event_date_start DESC
 ")->fetchAll();
 $eventId = (int) ($_GET['event'] ?? ($events[0]['id'] ?? 0));
+$type    = in_array($_GET['type'] ?? '', ANNOUNCE_TYPES, true) ? $_GET['type'] : 'announce';
 
-$groups = $eventId ? groupOrdersByRecipient(fetchOrdersToAnnounce($pdo, $eventId, false)) : [];
-$unsentStmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE status='confirmed' AND event_id=? AND " . ANNOUNCE_COLUMN . " IS NULL");
-$unsentStmt->execute([$eventId]);
-$unsentOrders = (int) $unsentStmt->fetchColumn();
-$unsentGroups = count(groupOrdersByRecipient(fetchOrdersToAnnounce($pdo, $eventId, true)));
+$groups = $eventId ? groupOrdersByRecipient(fetchOrdersToAnnounce($pdo, $eventId, false, $type)) : [];
+$unsentGroupList = $eventId ? groupOrdersByRecipient(fetchOrdersToAnnounce($pdo, $eventId, true, $type)) : [];
+$unsentGroups = count($unsentGroupList);
+$unsentOrders = array_sum(array_map(fn ($g) => count($g['orders']), $unsentGroupList));
 $sample = $groups[0] ?? null;
-$preview = $sample ? announceHtml($sample, false) : '';
+$preview = $sample ? announceHtml($sample, false, $type) : '';
 $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'")->fetchColumn();
 ?>
 <!DOCTYPE html>
@@ -113,6 +114,10 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
     <div class="card">
         <h2>Event</h2>
         <form method="GET" class="row">
+            <select name="type" onchange="this.form.submit()">
+                <option value="announce" <?= $type === 'announce' ? 'selected' : '' ?>>Group tickets closed (thank-you, all buyers)</option>
+                <option value="correction" <?= $type === 'correction' ? 'selected' : '' ?>>Group 3 correction (apology, Group 3 buyers only)</option>
+            </select>
             <select name="event" onchange="this.form.submit()">
                 <?php foreach ($events as $e): ?>
                 <option value="<?= (int)$e['id'] ?>" <?= (int)$e['id'] === $eventId ? 'selected' : '' ?>><?= htmlspecialchars($e['title']) ?> (<?= (int)$e['orders_count'] ?> orders)</option>
@@ -146,11 +151,11 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
 </div>
 
 <script>
-const CSRF = <?= json_encode($_SESSION['csrf']) ?>, EVENT = <?= (int)$eventId ?>;
+const CSRF = <?= json_encode($_SESSION['csrf']) ?>, EVENT = <?= (int)$eventId ?>, TYPE = <?= json_encode($type) ?>;
 const total = <?= (int)$unsentGroups ?>;
 const log = document.getElementById('log'), bar = document.getElementById('bar');
 const say = (t, cls) => { const d = document.createElement('div'); d.textContent = t; if (cls) d.className = cls; log.appendChild(d); };
-const post = data => fetch('announce', { method: 'POST', body: new URLSearchParams({ csrf: CSRF, event: EVENT, ...data }) }).then(r => r.json());
+const post = data => fetch('announce', { method: 'POST', body: new URLSearchParams({ csrf: CSRF, event: EVENT, type: TYPE, ...data }) }).then(r => r.json());
 
 document.getElementById('testBtn')?.addEventListener('click', async () => {
     const to = document.getElementById('testTo').value.trim();
@@ -159,7 +164,7 @@ document.getElementById('testBtn')?.addEventListener('click', async () => {
 });
 
 document.getElementById('sendAll')?.addEventListener('click', async e => {
-    if (!confirm('Send the announcement to ' + total + ' recipients now?')) return;
+    if (!confirm('Send this email to ' + total + ' recipients now?')) return;
     e.target.disabled = true; bar.style.display = 'block';
     let done = 0;
     while (true) {

@@ -5,11 +5,22 @@ require_once '../lib/addons.php';
 $pdo = getDBConnection();
 
 /**
- * Isi paket dibaca dari nama tier / add-on, mis. "GROUP 3 PERSON. Include 4-person tent, 3 mats & 3 sleeping bags"
- * → tenda kap 4 ×1, matras 3, sleeping bag 3 (per unit). Tier tanpa kalimat "Include ..." tidak membawa peralatan.
+ * Isi paket dibaca dari nama tier / add-on, mis. "GROUP 3 PERSON. Include 4-person tent, 2 mats & 2 sleeping bags"
+ * → tenda kap 4 ×1, matras 2, sleeping bag 2 (per unit). Tier tanpa kalimat "Include ..." tidak membawa peralatan.
  */
 function gearFromName(string $name): ?array
 {
+    // Paket add-on: data kita sendiri, selalu 1 tenda kap 4 + 2 matras + 2 sleeping bag, tidak bergantung teks nama.
+    if (preg_match('/add[\s-]*ons?|just a tent/i', $name)) {   // "just a tent" = nama lama tier add-on di produksi
+        return ['size' => 4, 'mats' => 2, 'bags' => 2];
+    }
+    // Paket Group: juga dikunci di sini (sesuai poster), supaya rekap benar walau nama tier di DB masih versi lama.
+    if (preg_match('/group\s*3\b/i', $name)) {
+        return ['size' => 4, 'mats' => 2, 'bags' => 2];
+    }
+    if (preg_match('/group\s*5\b/i', $name)) {
+        return ['size' => 6, 'mats' => 5, 'bags' => 5];
+    }
     if (!preg_match('/include\s+(\d+)\s*-?\s*person\s+tent\D+(\d+)\s*mats?\D+(\d+)\s*sleeping\s*bags?/i', $name, $m)) {
         return null;
     }
@@ -113,7 +124,7 @@ if (($_GET['export'] ?? '') === 'xlsx' && $event) {
     // Sheet 1: peserta + tenda
     $d = [];
     $d[] = [['PESERTA + TENDA (data ' . $today . ')', $X::G_TITLE]];
-    $d[] = [['Group 3 = tenda kap 4 · Group 5 = tenda kap 6 · tenda saja / add-on = tenda kap 3 · digabung per nama', $X::G_NOTE]];
+    $d[] = [['Group 3 = tenda kap 4 · Group 5 = tenda kap 6 · add-on = tenda kap 4 · digabung per nama', $X::G_NOTE]];
     $d[] = [];
     $h = [['Nama', $X::G_TH], ['Jumlah Tenda', $X::G_TH]];
     foreach ($cols as $z) $h[] = ["Tent $z", $X::G_TH];
