@@ -1,9 +1,14 @@
 <?php
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);   // jangan bocorkan error ke halaman/JSON di gerbang
 error_reporting(E_ALL);
 require_once 'auth.php';
 require_once '../config/config.php';
+require_once '../lib/addons.php';
 $pdo = getDBConnection();
+
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(16));
+}
 
 $result   = null;
 $searched = false;
@@ -45,6 +50,35 @@ function findOrderByScanned($pdo, $raw, $filterEventId) {
         if ($row) return $row;
     }
     return false;
+}
+
+function jsonOut(array $data): void
+{
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
+}
+
+// Endpoint AJAX untuk scan kamera: cari tiket dan konfirmasi masuk tanpa memuat ulang halaman,
+// jadi kamera tetap menyala dan tamu berikutnya bisa langsung di-scan.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['lookup', 'enter'], true)) {
+    if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
+        jsonOut(['ok' => false, 'error' => 'Sesi tidak valid. Muat ulang halaman.']);
+    }
+    if ($_POST['action'] === 'lookup') {
+        $o = findOrderByScanned($pdo, $_POST['code'] ?? '', $filterEventId);
+        if (!$o) {
+            jsonOut(['ok' => true, 'found' => false]);
+        }
+        $addons = array_map(fn ($a) => $a['name'] . ' ×' . (int) $a['qty'], getOrderAddons($pdo, (int) $o['id']));
+        jsonOut(['ok' => true, 'found' => true, 'id' => (int) $o['id'], 'status' => $o['status'],
+            'code' => $o['order_code'], 'name' => $o['buyer_name'], 'email' => $o['buyer_email'],
+            'event' => $o['event_title'], 'tier' => $o['tier_name'], 'qty' => (int) $o['qty'],
+            'addons' => $addons, 'used_at' => $o['used_at'] ? date('d M Y, H:i:s', strtotime($o['used_at'])) : null]);
+    }
+    $stmt = $pdo->prepare("UPDATE orders SET status='used', used_at=NOW() WHERE id=? AND status='confirmed'");
+    $stmt->execute([(int) ($_POST['order_id'] ?? 0)]);
+    jsonOut(['ok' => true, 'entered' => $stmt->rowCount() === 1]);   // false = sudah dipakai orang lain barusan
 }
 
 if (isset($_POST['action']) && $_POST['action'] === 'use' && isset($_POST['order_id'])) {
@@ -768,7 +802,40 @@ function formatDate($date) {
             font-size: 0.875rem;
         }
 
+        /* --- SCAN KAMERA (hasil langsung di bawah kamera) --- */
+        .cam-actions { display: flex; gap: 8px; margin-top: 10px; }
+        .cam-actions .btn-toggle-scan { margin-top: 0; flex: 1; }
+        .btn-cam {
+            padding: 11px 14px; border: 1px solid #e5e5e5; background: #fff; font: inherit;
+            font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; color: #000;
+        }
+        .btn-cam.active { background: #000; color: #fff; border-color: #000; }
+        .btn-photo { display: block; text-align: center; margin-top: 8px; }
+        .ajax-result { border: 2px solid #000; margin-top: 14px; }
+        .ajax-result .ar-head { padding: 16px; text-align: center; color: #fff; }
+        .ajax-result.valid   .ar-head { background: #0a7a32; }
+        .ajax-result.used    .ar-head,
+        .ajax-result.invalid .ar-head { background: #b3261e; }
+        .ajax-result.pending .ar-head { background: #b26a00; }
+        .ar-status { font-size: 1.25rem; font-weight: 800; letter-spacing: .5px; }
+        .ar-sub { font-size: .8rem; opacity: .9; margin-top: 3px; }
+        .ar-body { padding: 14px 16px; }
+        .ar-name { font-size: 1.05rem; font-weight: 700; }
+        .ar-meta { font-size: .8rem; color: rgba(0,0,0,.55); margin-top: 3px; line-height: 1.6; }
+        .ar-qty { font-size: 1.6rem; font-weight: 800; margin: 12px 0 4px; }
+        .ar-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+        .ar-buttons button { padding: 15px; font: inherit; font-size: .95rem; font-weight: 700; border: 1px solid #000; cursor: pointer; }
+        .ar-buttons .primary { background: #000; color: #fff; }
+        .ar-buttons .secondary { background: #fff; color: #000; }
+        .ar-buttons button:disabled { opacity: .5; }
+
         /* --- RESPONSIVE --- */
+        @media (max-width: 860px) {
+            .btn-search, .btn-cam, .scanner-tab, .btn-toggle-scan { min-height: 46px; }
+            .search-input { font-size: 1rem; padding: 13px 14px; }   /* 16px+ supaya iOS tidak zoom */
+            #qr-reader { min-height: 300px; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+        }
         @media (max-width: 1100px) {
             .page-layout { grid-template-columns: 1fr; }
             .scanner-card { position: static; }
@@ -815,11 +882,11 @@ function formatDate($date) {
         </div>
         <div class="stat-mini">
             <div class="stat-mini-label">Already Entered</div>
-            <div class="stat-mini-value"><?= $stats['used'] ?></div>
+            <div class="stat-mini-value" id="statUsed"><?= (int) $stats['used'] ?></div>
         </div>
         <div class="stat-mini">
             <div class="stat-mini-label">Not Scanned</div>
-            <div class="stat-mini-value"><?= $stats['confirmed'] ?></div>
+            <div class="stat-mini-value" id="statConfirmed"><?= (int) $stats['confirmed'] ?></div>
         </div>
         <div class="stat-mini">
             <div class="stat-mini-label">Pending</div>
@@ -855,10 +922,16 @@ function formatDate($date) {
                 <div id="section-camera" style="display:none">
                     <div id="qr-reader"></div>
                     <div id="scanStatus" class="scan-status"></div>
-                    <button class="btn-toggle-scan" id="btnScan" onclick="toggleScanner()">
-                        Open QR Scanner Camera
-                    </button>
-                    <div class="hint" style="margin-top:8px">Point at QR code → reads automatically.</div>
+                    <div class="cam-actions">
+                        <button type="button" class="btn-toggle-scan" id="btnScan" onclick="toggleScanner()">Open QR Scanner Camera</button>
+                        <button type="button" class="btn-cam" id="btnTorch" onclick="toggleTorch()" hidden>Flash</button>
+                        <button type="button" class="btn-cam" id="btnSwitch" onclick="switchCamera()" hidden>Flip</button>
+                    </div>
+                    <label class="btn-cam btn-photo">Camera not working? Scan from photo
+                        <input type="file" id="qrFile" accept="image/*" capture="environment" hidden>
+                    </label>
+                    <div id="scanResult"></div>
+                    <div class="hint" style="margin-top:8px">Point at the QR code. The result shows below and the camera stays on for the next guest.</div>
                 </div>
 
                 <?php if ($searched): ?>
@@ -1029,70 +1102,209 @@ function formatDate($date) {
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-let html5QrCode  = null;
-let isScanning   = false;
-let scanCooldown = false;
+const CSRF = <?= json_encode($_SESSION['csrf']) ?>, FILTER_EVENT = <?= (int) $filterEventId ?>;
+const START_ON_CAMERA = <?= $searched ? 'false' : 'true' ?>;
+
+let html5QrCode = null, isScanning = false, busy = false;
+let cameras = [], cameraIndex = -1, torchOn = false, lastCode = '', lastAt = 0;
+
+const el  = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const post = data => fetch('scan-tiket', {
+    method: 'POST',
+    body: new URLSearchParams({ csrf: CSRF, filter_event: FILTER_EVENT, ...data }),
+}).then(r => r.json());
+
+function setStatus(cls, text) {
+    const s = el('scanStatus');
+    s.className = 'scan-status ' + cls;
+    s.textContent = text;
+    s.style.display = text ? 'block' : 'none';
+}
 
 function switchTab(tab) {
     document.querySelectorAll('.scanner-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('active');
-    document.getElementById('section-manual').style.display = tab === 'manual' ? 'block' : 'none';
-    document.getElementById('section-camera').style.display = tab === 'camera' ? 'block' : 'none';
+    el('tab-' + tab).classList.add('active');
+    el('section-manual').style.display = tab === 'manual' ? 'block' : 'none';
+    el('section-camera').style.display = tab === 'camera' ? 'block' : 'none';
     if (tab !== 'camera') stopScanner();
 }
 
 function toggleScanner() { isScanning ? stopScanner() : startScanner(); }
 
-function startScanner() {
-    const btn    = document.getElementById('btnScan');
-    const status = document.getElementById('scanStatus');
-    html5QrCode  = new Html5Qrcode("qr-reader");
-    html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 12, qrbox: { width: 220, height: 220 } },
-        (decodedText) => {
-            if (scanCooldown) return;
-            scanCooldown = true;
-            beep();
-            // Kirim raw text hasil scan apa adanya. Parsing/disambiguasi
-            // format (mis. ada delimiter '|') ditangani di server (findOrderByScanned)
-            // supaya tidak salah tebak posisi kode saat format QR berbeda-beda.
-            let code = decodedText.trim().toUpperCase();
-            status.className   = 'scan-status found';
-            status.textContent = code + ' — Processing...';
-            stopScanner();
-            setTimeout(() => {
-                document.getElementById('codeInput').value = code;
-                switchTab('manual');
-                document.getElementById('searchForm').submit();
-            }, 500);
-        },
-        () => {}
-    ).then(() => {
-        isScanning = true;
-        btn.textContent  = 'Stop Camera';
-        btn.classList.add('active');
-        status.className = 'scan-status scanning';
-        status.textContent = 'Camera active — Point to QR code...';
-    }).catch(() => {
-        status.className = 'scan-status error';
-        status.textContent = 'Camera cannot be accessed.';
-        status.style.display = 'block';
+function getScanner() {
+    html5QrCode = html5QrCode || new Html5Qrcode('qr-reader', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],      // QR saja → decode lebih cepat
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },  // pakai detektor bawaan browser bila ada
+        verbose: false,
     });
+    return html5QrCode;
 }
 
-function stopScanner() {
-    if (html5QrCode && isScanning) {
-        html5QrCode.stop().then(() => {
-            html5QrCode.clear();
-            isScanning = false;
-            const btn = document.getElementById('btnScan');
-            if (btn) { btn.textContent = 'Open QR Scanner Camera'; btn.classList.remove('active'); }
-            const s = document.getElementById('scanStatus');
-            if (s) { s.className = 'scan-status'; s.style.display = 'none'; }
-        }).catch(() => {});
+async function startScanner(deviceId) {
+    if (isScanning) return;
+    if (!window.isSecureContext) {
+        setStatus('error', 'Camera needs HTTPS. Open the site with https:// or use "Scan from photo".');
+        return;
+    }
+    const config = {
+        fps: 15,
+        qrbox: (w, h) => { const side = Math.floor(Math.min(w, h) * 0.75); return { width: side, height: side }; },
+    };
+    try {
+        await getScanner().start(deviceId || { facingMode: 'environment' }, config, onDecode, () => {});
+        isScanning = true;
+        el('btnScan').textContent = 'Stop Camera';
+        el('btnScan').classList.add('active');
+        setStatus('scanning', 'Camera active. Point at the QR code...');
+        setupCameraControls();
+    } catch (err) {
+        setStatus('error', 'Camera cannot be accessed. Allow camera permission, or use "Scan from photo".');
     }
 }
+
+async function stopScanner() {
+    if (!html5QrCode || !isScanning) return;
+    isScanning = false;
+    torchOn = false;
+    try { await html5QrCode.stop(); html5QrCode.clear(); } catch (e) {}
+    const btn = el('btnScan');
+    if (btn) { btn.textContent = 'Open QR Scanner Camera'; btn.classList.remove('active'); }
+    el('btnTorch').hidden = true;
+    el('btnSwitch').hidden = true;
+    el('btnTorch').classList.remove('active');
+    setStatus('', '');
+}
+
+// Flash dan ganti kamera hanya muncul kalau perangkat mendukung.
+async function setupCameraControls() {
+    try { el('btnTorch').hidden = !html5QrCode.getRunningTrackCameraCapabilities().torchFeature().isSupported(); }
+    catch (e) { el('btnTorch').hidden = true; }
+    try {
+        cameras = await Html5Qrcode.getCameras();
+        el('btnSwitch').hidden = cameras.length < 2;
+    } catch (e) { el('btnSwitch').hidden = true; }
+}
+
+async function toggleTorch() {
+    try {
+        torchOn = !torchOn;
+        await html5QrCode.getRunningTrackCameraCapabilities().torchFeature().apply(torchOn);
+        el('btnTorch').classList.toggle('active', torchOn);
+    } catch (e) {
+        torchOn = false;
+        setStatus('error', 'Flash is not supported on this device.');
+    }
+}
+
+async function switchCamera() {
+    if (cameras.length < 2) return;
+    cameraIndex = (cameraIndex + 1) % cameras.length;
+    await stopScanner();
+    await startScanner(cameras[cameraIndex].id);
+}
+
+// Hasil decode (kamera) → cari tiket → tampilkan hasil, kamera berhenti sebentar sampai "Scan Next".
+async function onDecode(text) {
+    const code = text.trim().toUpperCase();
+    const now = Date.now();
+    if (busy || (code === lastCode && now - lastAt < 4000)) return;   // abaikan baca ganda tiket yang sama
+    busy = true; lastCode = code; lastAt = now;
+    beep();
+    if (navigator.vibrate) navigator.vibrate(60);
+    try { html5QrCode.pause(true); } catch (e) {}
+    await handleCode(code);
+}
+
+async function handleCode(code) {
+    setStatus('found', code + ' — checking...');
+    try {
+        const r = await post({ action: 'lookup', code });
+        if (!r.ok) throw new Error(r.error || 'Failed');
+        setStatus('', '');
+        showResult(r, code);
+    } catch (e) {
+        setStatus('error', 'Check failed: ' + e.message);
+        resumeScan();
+    }
+}
+
+function showResult(r, code) {
+    const box = el('scanResult');
+    let cls = 'invalid', title = 'INVALID TICKET', sub = 'Order rejected', canEnter = false;
+    if (!r.found) {
+        title = 'NOT FOUND'; sub = 'Code ' + code + ' is not in the system';
+    } else if (r.status === 'confirmed') {
+        cls = 'valid'; title = 'VALID TICKET'; sub = 'Allow entry'; canEnter = true;
+    } else if (r.status === 'used') {
+        cls = 'used'; title = 'ALREADY USED'; sub = 'Scanned ' + (r.used_at || 'before');
+    } else if (r.status === 'pending') {
+        cls = 'pending'; title = 'NOT CONFIRMED'; sub = 'Payment pending, deny entry';
+    }
+    let body = '';
+    if (r.found) {
+        body = '<div class="ar-name">' + esc(r.name) + '</div>'
+            + '<div class="ar-meta">' + esc(r.code) + '<br>' + esc(r.event) + '<br>' + esc(r.tier)
+            + (r.addons.length ? '<br>Add-on: ' + r.addons.map(esc).join(', ') : '') + '</div>'
+            + '<div class="ar-qty">' + r.qty + ' ' + (r.qty === 1 ? 'person' : 'people') + '</div>';
+    }
+    box.innerHTML = '<div class="ajax-result ' + cls + '">'
+        + '<div class="ar-head"><div class="ar-status">' + title + '</div><div class="ar-sub">' + esc(sub) + '</div></div>'
+        + '<div class="ar-body">' + body + '<div class="ar-buttons">'
+        + (canEnter ? '<button type="button" class="primary" id="btnEnter">Confirm Entry — ' + r.qty + ' ' + (r.qty === 1 ? 'person' : 'people') + '</button>' : '')
+        + '<button type="button" class="secondary" id="btnNext">Scan Next</button></div></div></div>';
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    el('btnNext').onclick = resumeScan;
+    if (canEnter) el('btnEnter').onclick = () => enterGuest(r);
+}
+
+async function enterGuest(r) {
+    const btn = el('btnEnter');
+    btn.disabled = true;
+    try {
+        const res = await post({ action: 'enter', order_id: r.id });
+        if (!res.ok) throw new Error(res.error || 'Failed');
+        if (res.entered) {
+            setStatus('found', r.name + ' — entry confirmed');
+            el('statUsed').textContent = (+el('statUsed').textContent || 0) + 1;
+            el('statConfirmed').textContent = Math.max(0, (+el('statConfirmed').textContent || 0) - 1);
+            setTimeout(resumeScan, 1200);
+        } else {
+            setStatus('error', 'This ticket was just used. Deny entry.');
+        }
+    } catch (e) {
+        btn.disabled = false;
+        setStatus('error', 'Could not confirm: ' + e.message + '. Try again.');
+    }
+}
+
+function resumeScan() {
+    el('scanResult').innerHTML = '';
+    busy = false;
+    if (isScanning) {
+        try { html5QrCode.resume(); } catch (e) {}
+        setStatus('scanning', 'Camera active. Point at the QR code...');
+    } else {
+        setStatus('', '');
+    }
+}
+
+// Cadangan kalau kamera live tidak bisa dipakai: foto QR dari kamera bawaan HP.
+el('qrFile').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    await stopScanner();
+    try {
+        busy = true;
+        const text = await getScanner().scanFile(file, false);
+        beep();
+        await handleCode(text.trim().toUpperCase());
+    } catch (err) {
+        busy = false;
+        setStatus('error', 'QR not readable in the photo. Move closer, add light, and try again.');
+    }
+});
 
 function beep() {
     try {
@@ -1103,7 +1315,7 @@ function beep() {
         gain.gain.setValueAtTime(0.3, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
-    } catch(e) {}
+    } catch (e) {}
 }
 
 function switchDaftar(tab, btn) {
@@ -1132,6 +1344,13 @@ document.getElementById('codeInput').addEventListener('paste', function() {
 });
 
 window.addEventListener('beforeunload', stopScanner);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopScanner(); });   // layar mati → kamera mati
+
+// Di HP langsung buka kamera (kecuali baru selesai cek manual).
+if (START_ON_CAMERA && window.matchMedia('(max-width: 860px)').matches) {
+    switchTab('camera');
+    startScanner();
+}
 </script>
 </body>
 </html>
