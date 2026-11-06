@@ -21,7 +21,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$orderId]);
         $order = $stmt->fetch();
 
-        if (!$order) {
+        if ($action === 'test') {
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 255) {
+                $flash = ['err', 'Invalid test email address.'];
+            } else {
+                require_once 'send-ticket-email.php';
+                $r = sendTestTicket($pdo, $email);
+                $flash = $r['success']
+                    ? ['ok', 'Test ticket handed to the mail server (' . $r['via'] . ') for ' . $email . '. Check the inbox and the spam folder. If it never arrives, the server accepted it but delivery failed (SPF/DKIM or spam filtering).']
+                    : ['err', 'Test ticket failed' . (isset($r['via']) ? ' via ' . $r['via'] : '') . ': ' . $r['error']];
+            }
+        } elseif (!$order) {
             $flash = ['err', 'Order not found.'];
         } elseif ($order['status'] !== 'confirmed') {
             $flash = ['err', 'Only confirmed orders can have their ticket email sent.'];
@@ -105,6 +115,11 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
         .sidebar-footer a:hover { color:#000; }
         .main { margin-left:220px; flex:1; padding:50px 48px; min-width:0; }
         .page-header { margin-bottom:32px; padding-bottom:32px; border-bottom:1px solid #e5e5e5; }
+        .test-card { border:1px solid #e5e5e5; padding:18px 20px; margin-bottom:24px; display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+        .test-card strong { display:block; font-size:.9rem; margin-bottom:4px; }
+        .test-card span { font-size:.8rem; color:rgba(0,0,0,.5); line-height:1.5; }
+        .test-row { display:flex; gap:8px; flex:1; min-width:260px; max-width:420px; }
+        .test-row input { flex:1; padding:10px 12px; border:1px solid #e5e5e5; font:inherit; font-size:.875rem; }
         .page-header h1 { font-size:1.75rem; font-weight:700; letter-spacing:-.5px; line-height:1; }
         .page-header p { font-size:.85rem; color:rgba(0,0,0,0.45); margin-top:10px; }
         .alert { padding:13px 18px; border:1px solid #e5e5e5; font-size:.875rem; margin-bottom:24px; line-height:1.7; }
@@ -153,6 +168,19 @@ $pendingCount = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'"
     <?php if ($flash): ?>
     <div class="alert <?= $flash[0] ?>"><?= htmlspecialchars($flash[1]) ?></div>
     <?php endif; ?>
+
+    <form method="POST" class="test-card">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
+        <input type="hidden" name="action" value="test">
+        <div>
+            <strong>Send test ticket</strong>
+            <span>Sends a sample e-ticket ("[TEST]", fake name and code) to any address to check that email reaches the inbox. No order is changed.</span>
+        </div>
+        <div class="test-row">
+            <input type="email" name="email" placeholder="your-email@example.com" required>
+            <button type="submit" class="btn btn-primary">Send test</button>
+        </div>
+    </form>
 
     <form method="GET" class="search-bar">
         <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Search order code, name, or email…">

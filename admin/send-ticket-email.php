@@ -13,17 +13,29 @@ require_once dirname(__DIR__) . '/lib/addons.php';
 const MAIL_SCRIPT_TIME_LIMIT = 120;
 const SMTP_TIMEOUT_SECONDS   = 12;
 
-function sendTicketEmail($pdo, $orderId) {
+/**
+ * Kirim e-ticket untuk satu order. Dengan $testTo, email dikirim ke alamat itu sebagai tiket CONTOH
+ * (nama dan kode palsu, subjek "[TEST]") dan status kirim order tidak diubah. Dipakai untuk
+ * memeriksa SMTP dan tampilan email tanpa menyentuh pembeli sungguhan.
+ */
+function sendTicketEmail($pdo, $orderId, ?string $testTo = null) {
     try {
         @set_time_limit(MAIL_SCRIPT_TIME_LIMIT);
-        return deliverTicketEmail($pdo, $orderId);
+        return deliverTicketEmail($pdo, $orderId, $testTo);
     } catch (Throwable $e) {
-        recordEmailResult($pdo, (int) $orderId, false, $e->getMessage());
+        if ($testTo === null) recordEmailResult($pdo, (int) $orderId, false, $e->getMessage());
         return ['success' => false, 'error' => $e->getMessage()];
     }
 }
 
-function deliverTicketEmail($pdo, $orderId) {
+/** Kirim tiket contoh ke $to memakai bentuk (tier, jumlah, add-on) order terbaru yang sudah dibayar. */
+function sendTestTicket($pdo, string $to): array {
+    $sample = $pdo->query("SELECT id FROM orders WHERE status IN ('confirmed','used') ORDER BY id DESC LIMIT 1")->fetchColumn();
+    if (!$sample) return ['success' => false, 'error' => 'No paid order exists to use as a sample.'];
+    return sendTicketEmail($pdo, (int) $sample, $to) + ['via' => MAIL_HOST . ':' . MAIL_PORT];
+}
+
+function deliverTicketEmail($pdo, $orderId, ?string $testTo = null) {
     $stmt = $pdo->prepare("
         SELECT o.*,
                e.title        AS event_title,
@@ -41,6 +53,13 @@ function deliverTicketEmail($pdo, $orderId) {
     $o = $stmt->fetch();
 
     if (!$o) return ['success' => false, 'error' => 'Order not found.'];
+
+    $isTest = $testTo !== null;
+    if ($isTest) {   // data pembeli sungguhan tidak ikut terkirim
+        $o['buyer_email'] = $testTo;
+        $o['buyer_name']  = 'Test Guest';
+        $o['order_code']  = 'NL-TEST00';
+    }
 
     // Format event date in English
     $ts       = strtotime($o['event_date_start']);
@@ -76,7 +95,7 @@ function deliverTicketEmail($pdo, $orderId) {
     $qrPng = fetchRemoteImage($qrUrl);
     $logoPath = dirname(__DIR__) . '/assets/logos/logo.png';
 
-    $subject = 'Your Ticket — ' . $o['event_title'] . ' [' . $o['order_code'] . ']';
+    $subject = ($isTest ? '[TEST] ' : '') . 'Your Ticket — ' . $o['event_title'] . ' [' . $o['order_code'] . ']';
     $altBody = "Your ticket for " . $o['event_title'] . " has been confirmed.\n\nTicket Code: " . $o['order_code'] . "\nDate: $tglEvent\nLocation: " . $o['location'] . ", " . $o['city'] . "\nTier: " . $o['tier_name'] . "\nQuantity: " . $o['qty'] . " ticket(s)\n" . $addonsText . "\nPresent this code at the entrance.";
 
     $lastError = 'Unknown error';
@@ -115,7 +134,7 @@ function deliverTicketEmail($pdo, $orderId) {
             $mail->AltBody = $altBody;
 
             $mail->send();
-            recordEmailResult($pdo, (int)$o['id'], true, null);
+            if (!$isTest) recordEmailResult($pdo, (int)$o['id'], true, null);
             return ['success' => true];
 
         } catch (Exception $e) {
@@ -124,7 +143,7 @@ function deliverTicketEmail($pdo, $orderId) {
         }
     }
 
-    recordEmailResult($pdo, (int)$o['id'], false, $lastError);
+    if (!$isTest) recordEmailResult($pdo, (int)$o['id'], false, $lastError);
     return ['success' => false, 'error' => $lastError];
 }
 
