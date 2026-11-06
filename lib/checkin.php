@@ -5,8 +5,11 @@
  */
 require_once __DIR__ . '/addons.php';
 
-const CHECKIN_ACTIONS      = ['lookup', 'search', 'enter', 'undo'];
+const CHECKIN_ACTIONS      = ['lookup', 'search', 'enter', 'undo', 'snapshot', 'sync'];
 const CHECKIN_SEARCH_LIMIT = 8;
+const SYNC_MAX_ENTRIES     = 500;
+const SYNC_MAX_AGE_SECONDS = 172800;   // scan offline yang lebih tua dari ini dianggap jamnya salah
+const SYNC_MAX_AHEAD       = 300;
 const TEST_TICKET_CODE     = 'NL-TEST00';   // kode tiket contoh dari "Send test ticket"; tidak ada di database
 const CHECKIN_ORDER_SELECT = 'SELECT o.*, e.title AS event_title, t.tier_name
     FROM orders o
@@ -129,22 +132,105 @@ function checkinStats(PDO $pdo, int $eventId): array
 
 /**
  * Tandai masuk, atau batalkan masuk. UPDATE bersyarat membuat dua petugas yang scan tiket
- * yang sama bersamaan tidak sama-sama berhasil: yang kedua mendapat changed = false.
+ * yang sama bersamaan tidak sama-sama berhasil: yang kedua mendapat false.
+ * $at (detik unix) dipakai untuk scan yang tertunda karena offline; null berarti sekarang.
  */
-function changeEntry(PDO $pdo, string $action, int $orderId, int $eventId): array
+function updateEntry(PDO $pdo, string $action, int $orderId, ?int $at = null): bool
 {
     $sql = $action === 'enter'
-        ? "UPDATE orders SET status = 'used', used_at = NOW() WHERE id = ? AND status = 'confirmed'"
+        ? "UPDATE orders SET status = 'used', used_at = COALESCE(FROM_UNIXTIME(?), NOW()) WHERE id = ? AND status = 'confirmed'"
         : "UPDATE orders SET status = 'confirmed', used_at = NULL WHERE id = ? AND status = 'used'";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$orderId]);
+    $stmt->execute($action === 'enter' ? [$at, $orderId] : [$orderId]);
+    return $stmt->rowCount() === 1;
+}
 
-    $order = fetchOrderById($pdo, $orderId);
+function changeEntry(PDO $pdo, string $action, int $orderId, int $eventId): array
+{
+    $changed = updateEntry($pdo, $action, $orderId);
+    $order   = fetchOrderById($pdo, $orderId);
     return [
         'ok'      => true,
-        'changed' => $stmt->rowCount() === 1,
+        'changed' => $changed,
         'order'   => $order ? orderPayload($pdo, $order) : null,
         'stats'   => checkinStats($pdo, $eventId),
+    ];
+}
+
+/** Daftar tamu lengkap untuk disimpan di HP petugas, supaya scan tetap jalan tanpa sinyal. */
+function snapshotPayload(PDO $pdo, int $eventId): array
+{
+    $orders = fetchCheckinOrders($pdo, $eventId);
+    return [
+        'ok'          => true,
+        'orders'      => array_map(fn ($o) => orderPayload($pdo, $o), $orders),
+        'server_time' => time(),
+    ];
+}
+
+/** Jam scan dari HP hanya dipercaya kalau masuk akal; kalau tidak, pakai jam server saat sinkron. */
+function sanitizeEntryTime(mixed $at): ?int
+{
+    $at  = is_numeric($at) ? (int) $at : 0;
+    $now = time();
+    return ($at >= $now - SYNC_MAX_AGE_SECONDS && $at <= $now + SYNC_MAX_AHEAD) ? $at : null;
+}
+
+/** Ambil antrean scan offline dari JSON; entri yang bentuknya salah dibuang. */
+function decodeSyncEntries(string $json): array
+{
+    $list = json_decode($json, true);
+    $entries = [];
+    foreach (is_array($list) ? array_slice($list, 0, SYNC_MAX_ENTRIES) : [] as $item) {
+        $action  = is_array($item) ? ($item['action'] ?? '') : '';
+        $orderId = is_array($item) ? (int) ($item['order_id'] ?? 0) : 0;
+        if (in_array($action, ['enter', 'undo'], true) && $orderId > 0) {
+            $entries[] = ['id' => (string) ($item['id'] ?? ''), 'action' => $action, 'order_id' => $orderId,
+                          'at' => sanitizeEntryTime($item['at'] ?? null)];
+        }
+    }
+    return $entries;
+}
+
+/** Sinkron yang diulang (respons sebelumnya hilang) tidak boleh dilaporkan sebagai bentrok. */
+function isRepeatedEntry(PDO $pdo, array $entry, ?array $order): bool
+{
+    if (!$order) {
+        return false;
+    }
+    if ($entry['action'] === 'undo') {
+        return $order['status'] === 'confirmed';
+    }
+    if ($order['status'] !== 'used' || $entry['at'] === null) {
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT UNIX_TIMESTAMP(used_at) FROM orders WHERE id = ?');
+    $stmt->execute([$entry['order_id']]);
+    return abs((int) $stmt->fetchColumn() - $entry['at']) <= 2;
+}
+
+/** Terapkan satu scan offline. result: applied | duplicate | conflict (tiket sudah dipakai di perangkat lain, dst.). */
+function applyQueuedEntry(PDO $pdo, array $entry): array
+{
+    $changed = updateEntry($pdo, $entry['action'], $entry['order_id'], $entry['at']);
+    $order   = fetchOrderById($pdo, $entry['order_id']);
+    $result  = $changed ? 'applied' : (isRepeatedEntry($pdo, $entry, $order) ? 'duplicate' : 'conflict');
+    return [
+        'id'       => $entry['id'],
+        'order_id' => $entry['order_id'],
+        'action'   => $entry['action'],
+        'result'   => $result,
+        'order'    => $order ? orderPayload($pdo, $order) : null,
+    ];
+}
+
+function syncEntries(PDO $pdo, array $entries, int $eventId): array
+{
+    return [
+        'ok'          => true,
+        'results'     => array_map(fn ($entry) => applyQueuedEntry($pdo, $entry), $entries),
+        'stats'       => checkinStats($pdo, $eventId),
+        'server_time' => time(),
     ];
 }
 
@@ -172,6 +258,10 @@ function checkinApi(PDO $pdo, string $action, array $input, int $eventId): array
         case 'enter':
         case 'undo':
             return changeEntry($pdo, $action, (int) ($input['order_id'] ?? 0), $eventId);
+        case 'snapshot':
+            return snapshotPayload($pdo, $eventId);
+        case 'sync':
+            return syncEntries($pdo, decodeSyncEntries((string) ($input['entries'] ?? '')), $eventId);
     }
     return ['ok' => false, 'error' => 'Unknown action.'];
 }

@@ -610,6 +610,22 @@ function guestList(string $id, array $orders, string $mode, string $emptyText): 
         .ar-buttons .secondary { background: #fff; color: #000; }
         .ar-buttons button:disabled { opacity: .5; }
 
+
+        /* --- STATUS KONEKSI / OFFLINE --- */
+        .offline-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; border: 1px solid #e5e5e5; padding: 10px 14px; margin-bottom: 16px; font-size: .8rem; }
+        .offline-bar .ob-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px; }
+        .offline-bar .ob-dot { width: 9px; height: 9px; border-radius: 50%; background: #0a7a32; flex-shrink: 0; }
+        .offline-bar[data-state="busy"] .ob-dot { background: #b26a00; }
+        .offline-bar[data-state="offline"] { border-color: #b26a00; background: #fff8ec; }
+        .offline-bar[data-state="offline"] .ob-dot { background: #b26a00; }
+        .offline-bar[data-state="bad"] { border-color: #b3261e; background: #fdf1f0; }
+        .offline-bar[data-state="bad"] .ob-dot { background: #b3261e; }
+        #obDetail { color: rgba(0,0,0,.55); }
+        .ob-actions { display: flex; gap: 8px; }
+        .ob-actions .btn-cam { padding: 7px 12px; }
+        .ob-conflicts { flex-basis: 100%; border-top: 1px solid #f0c4c0; padding-top: 8px; color: #b3261e; font-weight: 600; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+        .ob-conflicts[hidden], .ob-actions [hidden] { display: none; }
+
         /* --- RESPONSIVE --- */
         @media (max-width: 860px) {
             .btn-search, .btn-cam, .scanner-tab, .btn-toggle-scan { min-height: 46px; }
@@ -663,6 +679,15 @@ function guestList(string $id, array $orders, string $mode, string $emptyText): 
             <?php endforeach; ?>
         </select>
     </form>
+
+    <div class="offline-bar" id="offlineBar" data-state="busy">
+        <div class="ob-main"><span class="ob-dot"></span><b id="obState">Checking…</b><span id="obDetail"></span></div>
+        <div class="ob-actions">
+            <button type="button" class="btn-cam" id="obSync" hidden>Sync now</button>
+            <button type="button" class="btn-cam" id="obRefresh">Update offline list</button>
+        </div>
+        <div class="ob-conflicts" id="obConflicts" hidden></div>
+    </div>
 
     <div class="stats-bar">
         <div class="stat-mini"><div class="stat-mini-label">People Inside</div><div class="stat-mini-value" id="stat-people_inside"><?= $stats['people_inside'] ?></div></div>
@@ -732,6 +757,7 @@ function guestList(string $id, array $orders, string $mode, string $emptyText): 
 
 <script>window.SCAN_CONFIG = { csrf: <?= json_encode($_SESSION['csrf']) ?>, eventId: <?= (int) $filterEventId ?> };</script>
 <script src="../assets/vendor/html5-qrcode.min.js"></script>
+<script src="../assets/js/scan-offline.js"></script>
 <script src="../assets/js/scan-tiket.js"></script>
 </body>
 </html>

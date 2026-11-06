@@ -2,6 +2,7 @@
  * Halaman admin/scan-tiket: scan QR dengan kamera, cari manual (kode/nama/email/HP),
  * konfirmasi masuk, dan batalkan masuk. Konfigurasi dari window.SCAN_CONFIG = { csrf, eventId }.
  * Semua data lewat AJAX, jadi kamera tetap menyala untuk tamu berikutnya.
+ * Kalau sinyal hilang, scan-offline.js menjawab dari salinan daftar tamu di HP dan menyinkronkannya nanti.
  */
 (() => {
     'use strict';
@@ -10,6 +11,9 @@
     const REPEAT_SCAN_MS = 4000;       // abaikan baca ganda QR yang sama
     const NEXT_GUEST_DELAY_MS = 1200;  // jeda sebelum kamera lanjut setelah konfirmasi
     const CODE_PATTERN = /^NL-[A-Z0-9]{6}$/i;
+    const ENTRY_ACTIONS = ['enter', 'undo'];
+    const READ_TIMEOUT_MS = 6000;      // lewat ini dianggap tidak ada sinyal → pakai salinan di HP
+    const WRITE_TIMEOUT_MS = 12000;    // menyimpan masuk lebih lama ditunggu, supaya tidak tercatat ganda
 
     const state = {
         scanner: null, scanning: false, busy: false, resumeOnVisible: false,
@@ -23,15 +27,32 @@
 
     /* ---------- server ---------- */
 
-    async function api(action, data = {}) {
-        const response = await fetch('scan-tiket', {
-            method: 'POST',
-            body: new URLSearchParams({ csrf: CSRF, filter_event: EVENT_ID, action, ...data }),
-        });
-        const json = await response.json();
-        if (!json.ok) throw new Error(json.error || 'Request failed');
-        return json;
+    function browserStorage() {
+        try { return window.localStorage; } catch (e) { return null; }   // diblokir di sebagian mode privat
     }
+
+    /** Satu kali panggilan ke server. Melempar bila tidak terjangkau, atau jawabannya bukan JSON (sesi habis / error server). */
+    async function post(action, data = {}) {
+        const controller = new AbortController();
+        const timeout = ENTRY_ACTIONS.includes(action) ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS;
+        const timer = setTimeout(() => controller.abort(), timeout);
+        try {
+            const response = await fetch('scan-tiket', {
+                method: 'POST',
+                body: new URLSearchParams({ csrf: CSRF, filter_event: EVENT_ID, action, ...data }),
+                signal: controller.signal,
+            });
+            if (!(response.headers.get('content-type') || '').includes('json')) {
+                throw new Error('Login expired or server error');
+            }
+            return await response.json();
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    const offline = ScanOffline.create({ post, eventId: EVENT_ID, storage: browserStorage() });
+    const api = (action, data) => offline.request(action, data);
 
     /* ---------- umpan balik: suara, getar, layar ---------- */
 
@@ -235,11 +256,12 @@
                 return;
             }
             moveGuestRow(res.order, action === 'enter');
+            const suffix = res.offline ? ' (saved on this phone, will sync)' : '';
             if (action === 'enter') {
-                setStatus('found', order.name + ' — entry confirmed');
+                setStatus('found', order.name + ' — entry confirmed' + suffix);
                 setTimeout(resumeScan, NEXT_GUEST_DELAY_MS);
             } else {
-                setStatus('found', order.name + ' — entry undone');
+                setStatus('found', order.name + ' — entry undone' + suffix);
                 presentOrder(res.order);
             }
         } catch (e) {
@@ -346,6 +368,79 @@
         }
     }
 
+    /* ---------- status koneksi dan sinkron ---------- */
+
+    function formatClock(ms) {
+        const d = new Date(ms);
+        return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+
+    function connectionView(st) {
+        const waiting = st.queued ? ` · ${st.queued} scan${st.queued === 1 ? '' : 's'} waiting to sync` : '';
+        const updated = st.updatedAt ? `${st.count} guests saved, updated ${formatClock(st.updatedAt)}` : 'offline list not downloaded yet';
+        if (st.offline && st.ready) return { state: 'offline', title: 'OFFLINE', detail: `Scans are saved on this phone${waiting}. ${st.lastError}` };
+        if (st.offline) return { state: 'bad', title: 'OFFLINE', detail: `No offline list on this phone: scanning needs a connection. ${st.lastError}` };
+        if (st.syncing) return { state: 'busy', title: 'Syncing…', detail: `Sending${waiting}` };
+        if (st.queued) return { state: 'busy', title: 'Online', detail: `Sending${waiting}` };
+        if (!st.ready) return { state: 'busy', title: 'Online', detail: 'Downloading the offline list…' };
+        return { state: 'ok', title: 'Online', detail: updated + (st.lastError ? ' · ' + st.lastError : '') };
+    }
+
+    const CONFLICT_TEXT = {
+        enter: c => `${c.name} (${c.code}) was already ${c.status === 'used' ? 'entered on another device' : 'not valid (' + c.status + ')'}: possible duplicate entry.`,
+        undo:  c => `Undo for ${c.name} (${c.code}) did not apply: the ticket was not marked as used.`,
+    };
+
+    function renderConnection() {
+        const st = offline.status();
+        const view = connectionView(st);
+        el('offlineBar').dataset.state = view.state;
+        el('obState').textContent = view.title;
+        el('obDetail').textContent = view.detail;
+        el('obSync').hidden = st.queued === 0;
+        const box = el('obConflicts');
+        const list = offline.conflicts();
+        box.hidden = list.length === 0;
+        box.innerHTML = list.length
+            ? list.map(c => '<div>⚠ ' + esc((CONFLICT_TEXT[c.action] || CONFLICT_TEXT.enter)(c)) + '</div>').join('')
+              + '<button type="button" class="btn-cam" id="obDismiss">Dismiss</button>'
+            : '';
+        if (list.length) el('obDismiss').onclick = () => offline.clearConflicts();
+    }
+
+    /** Daftar tamu di halaman ikut disesuaikan dengan salinan terbaru, termasuk scan dari HP lain. */
+    function reconcileLists() {
+        const inEntered = new Set([...el('list-entered').querySelectorAll('.daftar-item')].map(row => row.dataset.code));
+        const inWaiting = new Set([...el('list-unscanned').querySelectorAll('.daftar-item')].map(row => row.dataset.code));
+        for (const order of offline.orders()) {
+            if (order.status === 'used' && inWaiting.has(order.code)) moveGuestRow(order, true);
+            else if (order.status === 'confirmed' && inEntered.has(order.code)) moveGuestRow(order, false);
+        }
+        renderStats(offline.stats());
+    }
+
+    function setupOffline() {
+        offline.onChange(kind => { renderConnection(); if (kind === 'snapshot') reconcileLists(); });
+        el('obRefresh').onclick = () => offline.refresh();
+        el('obSync').onclick = () => offline.sync();
+        window.addEventListener('online', () => offline.tick());
+        renderConnection();
+        offline.start();
+        registerServiceWorker();
+    }
+
+    /** Service worker menyimpan halaman dan skripnya supaya halaman scan bisa dibuka tanpa sinyal. */
+    async function registerServiceWorker() {
+        if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+        try {
+            const registration = await navigator.serviceWorker.register('scan-sw.js');
+            await navigator.serviceWorker.ready;
+            if (!navigator.serviceWorker.controller && registration.active) {   // kunjungan pertama belum lewat service worker
+                registration.active.postMessage({ type: 'cache-page', url: location.href });
+            }
+        } catch (e) { /* tanpa service worker, halaman tetap jalan selama online */ }
+    }
+
     /* ---------- tab dan pemasangan ---------- */
 
     function switchTab(tab) {
@@ -383,6 +478,7 @@
 
     bindEvents();
     ['list-entered', 'list-unscanned'].forEach(syncList);
+    setupOffline();
 
     // Di HP langsung buka kamera.
     if (window.matchMedia('(max-width: 860px)').matches) {
