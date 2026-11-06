@@ -598,6 +598,7 @@ function guestList(string $id, array $orders, string $mode, string $emptyText): 
         .ajax-result.invalid .ar-head { background: #b3261e; }
         .ajax-result.pending .ar-head { background: #b26a00; }
         .ar-status { font-size: 1.25rem; font-weight: 800; letter-spacing: .5px; }
+        .ajax-result.test .ar-head { background: #1a56db; }
         .ar-sub { font-size: .8rem; opacity: .9; margin-top: 3px; }
         .ar-body { padding: 14px 16px; }
         .ar-name { font-size: 1.05rem; font-weight: 700; }

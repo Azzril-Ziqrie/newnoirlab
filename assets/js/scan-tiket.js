@@ -186,7 +186,8 @@
     function describeOrder(order, code) {
         if (!order) return { kind: 'invalid', title: 'NOT FOUND', sub: 'Code ' + code + ' is not in the system' };
         switch (order.status) {
-            case 'confirmed': return { kind: 'valid', title: 'VALID TICKET', sub: 'Allow entry', canEnter: true };
+            case 'test':      return { kind: 'test', title: 'TEST TICKET', sub: 'Scan works. Sample ticket, nothing is recorded.', accepted: true };
+            case 'confirmed': return { kind: 'valid', title: 'VALID TICKET', sub: 'Allow entry', canEnter: true, accepted: true };
             case 'used':      return { kind: 'used', title: 'ALREADY USED', sub: 'Scanned ' + (order.used_at || 'before'), canUndo: true };
             case 'pending':   return { kind: 'pending', title: 'NOT CONFIRMED', sub: 'Payment pending, deny entry' };
             default:          return { kind: 'invalid', title: 'INVALID TICKET', sub: 'Order rejected' };
@@ -203,7 +204,7 @@
 
     function presentOrder(order, code = '') {
         const view = describeOrder(order, code);
-        feedback(!!view.canEnter);
+        feedback(!!view.accepted);
         const box = el('scanResult');
         const buttons = (view.canEnter ? '<button type="button" class="primary" id="btnEnter">Confirm Entry — ' + pluralPeople(order.qty) + '</button>' : '')
             + (view.canUndo ? '<button type="button" class="secondary" id="btnUndo">Undo entry (marked by mistake)</button>' : '')

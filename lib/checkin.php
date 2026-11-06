@@ -7,6 +7,7 @@ require_once __DIR__ . '/addons.php';
 
 const CHECKIN_ACTIONS      = ['lookup', 'search', 'enter', 'undo'];
 const CHECKIN_SEARCH_LIMIT = 8;
+const TEST_TICKET_CODE     = 'NL-TEST00';   // kode tiket contoh dari "Send test ticket"; tidak ada di database
 const CHECKIN_ORDER_SELECT = 'SELECT o.*, e.title AS event_title, t.tier_name
     FROM orders o
     JOIN events  e ON o.event_id  = e.id
@@ -147,11 +148,22 @@ function changeEntry(PDO $pdo, string $action, int $orderId, int $eventId): arra
     ];
 }
 
+/** Tiket contoh: dikenali tanpa database supaya QR di email tes bisa dipakai menguji scan. */
+function testTicketPayload(): array
+{
+    return ['id' => 0, 'status' => 'test', 'code' => TEST_TICKET_CODE, 'name' => 'Test Guest', 'email' => '', 'phone' => '',
+            'event' => 'TEST TICKET', 'tier' => 'Sample ticket', 'qty' => 1, 'addons' => [],
+            'used_at' => null, 'used_at_short' => '', 'confirmed_at_short' => ''];
+}
+
 /** Satu pintu untuk semua aksi AJAX halaman scan. */
 function checkinApi(PDO $pdo, string $action, array $input, int $eventId): array
 {
     switch ($action) {
         case 'lookup':
+            if (in_array(TEST_TICKET_CODE, scanCandidates((string) ($input['code'] ?? '')), true)) {
+                return ['ok' => true, 'order' => testTicketPayload()];
+            }
             $order = findOrderByScanned($pdo, (string) ($input['code'] ?? ''), $eventId);
             return ['ok' => true, 'order' => $order ? orderPayload($pdo, $order) : null];
         case 'search':

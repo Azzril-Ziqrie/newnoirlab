@@ -8,6 +8,7 @@ require_once dirname(__DIR__) . '/lib/PHPMailer/PHPMailer.php';
 require_once dirname(__DIR__) . '/lib/PHPMailer/SMTP.php';
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/lib/addons.php';
+require_once dirname(__DIR__) . '/lib/checkin.php';   // TEST_TICKET_CODE
 
 // Batas waktu PHP shared hosting sering 30 detik, sedangkan QR + dua percobaan SMTP bisa lebih lama.
 const MAIL_SCRIPT_TIME_LIMIT = 120;
@@ -58,7 +59,7 @@ function deliverTicketEmail($pdo, $orderId, ?string $testTo = null) {
     if ($isTest) {   // data pembeli sungguhan tidak ikut terkirim
         $o['buyer_email'] = $testTo;
         $o['buyer_name']  = 'Test Guest';
-        $o['order_code']  = 'NL-TEST00';
+        $o['order_code']  = TEST_TICKET_CODE;
     }
 
     // Format event date in English
