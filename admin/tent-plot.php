@@ -16,128 +16,62 @@ if (!$event) {
 }
 $eventId = $event ? (int) $event['id'] : 0;
 
-/** Jawaban JSON untuk semua aksi editor denah. */
-function tentApi(PDO $pdo, int $eventId): void
+/** Peta aksi editor denah → fungsi di lib/tents.php. Tiap aksi mengembalikan data tambahan (atau []) untuk dikirim ke klien. */
+function tentActions(PDO $pdo, int $eventId): array
+{
+    return [
+        'load'      => fn(array $in) => [],
+        'save_plot' => function (array $in) use ($pdo, $eventId) { tentSavePlot($pdo, $eventId, (int) ($in['rows'] ?? 0), (int) ($in['cols'] ?? 0), (string) ($in['front'] ?? '')); return []; },
+        'fill'      => function (array $in) use ($pdo, $eventId) { tentFillEmptyCells($pdo, $eventId); return []; },
+        'add'       => function (array $in) use ($pdo, $eventId) { tentAddAt($pdo, $eventId, (int) ($in['r'] ?? -1), (int) ($in['c'] ?? -1)); return []; },
+        'save'      => function (array $in) use ($pdo, $eventId) { tentUpdate($pdo, $eventId, (int) ($in['id'] ?? 0), $in); return []; },
+        'delete'    => function (array $in) use ($pdo, $eventId) { tentDelete($pdo, $eventId, (int) ($in['id'] ?? 0)); return []; },
+        'move'      => function (array $in) use ($pdo, $eventId) { tentMove($pdo, $eventId, (int) ($in['id'] ?? 0), (int) ($in['r'] ?? -1), (int) ($in['c'] ?? -1)); return []; },
+        'orders'    => fn(array $in) => ['orders' => tentSearchOrders($pdo, $eventId, (string) ($in['q'] ?? ''))],
+    ];
+}
+
+function tentRespond(array $body, int $status = 200): void
+{
+    http_response_code($status);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE);
+}
+
+function tentHandleRequest(PDO $pdo, int $eventId): void
 {
     header('Content-Type: application/json; charset=utf-8');
     $in = json_decode(file_get_contents('php://input'), true) ?: [];
-    $out = fn(array $d) => print json_encode($d + ['ok' => true], JSON_UNESCAPED_UNICODE);
-    $fail = function (string $m, int $code = 400) { http_response_code($code); echo json_encode(['ok' => false, 'error' => $m]); };
 
-    if (!hash_equals($_SESSION['csrf'], (string) ($in['csrf'] ?? ''))) { $fail('Token sesi tidak valid. Muat ulang halaman.', 403); return; }
-    if (!$eventId) { $fail('Event BONAFEST tidak ditemukan.'); return; }
+    if (!hash_equals($_SESSION['csrf'], (string) ($in['csrf'] ?? ''))) {
+        tentRespond(['ok' => false, 'error' => 'Token sesi tidak valid. Muat ulang halaman.'], 403);
+        return;
+    }
+    if (!$eventId) {
+        tentRespond(['ok' => false, 'error' => 'Event BONAFEST tidak ditemukan.'], 400);
+        return;
+    }
 
-    $state = fn() => ['plot' => tentGetPlot($pdo, $eventId), 'tents' => tentList($pdo, $eventId)];
-    $inGrid = function (int $r, int $c) use ($pdo, $eventId): bool {
-        $p = tentGetPlot($pdo, $eventId);
-        return $r >= 0 && $c >= 0 && $r < $p['rows'] && $c < $p['cols'];
-    };
+    $action = tentActions($pdo, $eventId)[$in['action'] ?? ''] ?? null;
+    if (!$action) {
+        tentRespond(['ok' => false, 'error' => 'Aksi tidak dikenal.'], 400);
+        return;
+    }
 
     try {
-        switch ($in['action'] ?? '') {
-            case 'load':
-                $out($state());
-                return;
-
-            case 'save_plot':
-                $rows  = max(1, min(TENT_MAX_ROWS, (int) ($in['rows'] ?? 0)));
-                $cols  = max(1, min(TENT_MAX_COLS, (int) ($in['cols'] ?? 0)));
-                $front = mb_substr(trim((string) ($in['front'] ?? '')), 0, 60);
-                $pdo->beginTransaction();
-                $pdo->prepare("INSERT INTO tent_plots (event_id, rows_count, cols_count, front_label) VALUES (?,?,?,?)
-                               ON DUPLICATE KEY UPDATE rows_count = VALUES(rows_count), cols_count = VALUES(cols_count), front_label = VALUES(front_label)")
-                    ->execute([$eventId, $rows, $cols, $front]);
-                // Tenda yang jatuh di luar denah baru ikut terhapus (klien sudah konfirmasi).
-                $pdo->prepare("DELETE FROM tents WHERE event_id = ? AND (row_idx >= ? OR col_idx >= ?)")->execute([$eventId, $rows, $cols]);
-                $pdo->commit();
-                $out($state());
-                return;
-
-            case 'fill':   // pasang tenda di semua sel yang masih kosong
-                $p = tentGetPlot($pdo, $eventId);
-                $ins = $pdo->prepare("INSERT IGNORE INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)");
-                $pdo->beginTransaction();
-                for ($r = 0; $r < $p['rows']; $r++) {
-                    for ($c = 0; $c < $p['cols']; $c++) {
-                        $ins->execute([$eventId, $r, $c, tentDefaultLabel($r, $c)]);
-                    }
-                }
-                $pdo->commit();
-                $out($state());
-                return;
-
-            case 'add':
-                $r = (int) ($in['r'] ?? -1); $c = (int) ($in['c'] ?? -1);
-                if (!$inGrid($r, $c)) { $fail('Sel di luar denah.'); return; }
-                $pdo->prepare("INSERT IGNORE INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)")
-                    ->execute([$eventId, $r, $c, tentDefaultLabel($r, $c)]);
-                $out($state());
-                return;
-
-            case 'save':
-                $id = (int) ($in['id'] ?? 0);
-                $status = ($in['status'] ?? '') === 'blocked' ? 'blocked' : 'free';
-                $orderId = !empty($in['order_id']) ? (int) $in['order_id'] : null;
-                $orderCode = $orderId ? mb_substr((string) ($in['order_code'] ?? ''), 0, 20) : null;
-                $st = $pdo->prepare("UPDATE tents SET label = ?, guest_name = ?, pax = ?, note = ?, status = ?, order_id = ?, order_code = ?
-                                     WHERE id = ? AND event_id = ?");
-                $st->execute([
-                    mb_substr(trim((string) ($in['label'] ?? '')), 0, 20),
-                    mb_substr(trim((string) ($in['guest'] ?? '')), 0, 120),
-                    max(0, min(99, (int) ($in['pax'] ?? 0))),
-                    mb_substr(trim((string) ($in['note'] ?? '')), 0, 255),
-                    $status, $orderId, $orderCode, $id, $eventId,
-                ]);
-                $out($state());
-                return;
-
-            case 'delete':
-                $pdo->prepare("DELETE FROM tents WHERE id = ? AND event_id = ?")->execute([(int) ($in['id'] ?? 0), $eventId]);
-                $out($state());
-                return;
-
-            case 'move':   // pindah ke sel kosong, atau tukar posisi bila sel tujuan berisi tenda
-                $id = (int) ($in['id'] ?? 0); $r = (int) ($in['r'] ?? -1); $c = (int) ($in['c'] ?? -1);
-                if (!$inGrid($r, $c)) { $fail('Sel di luar denah.'); return; }
-                $pdo->beginTransaction();
-                $a = $pdo->prepare("SELECT id, row_idx, col_idx FROM tents WHERE id = ? AND event_id = ? FOR UPDATE");
-                $a->execute([$id, $eventId]);
-                $from = $a->fetch();
-                if (!$from) { $pdo->rollBack(); $fail('Tenda tidak ditemukan.'); return; }
-                $b = $pdo->prepare("SELECT id FROM tents WHERE event_id = ? AND row_idx = ? AND col_idx = ? FOR UPDATE");
-                $b->execute([$eventId, $r, $c]);
-                $to = $b->fetchColumn();
-                $set = $pdo->prepare("UPDATE tents SET row_idx = ?, col_idx = ? WHERE id = ?");
-                if ($to && (int) $to !== $id) {
-                    $set->execute([-1, -1, $id]);                                   // parkir sementara (kunci unik)
-                    $set->execute([$from['row_idx'], $from['col_idx'], $to]);
-                }
-                $set->execute([$r, $c, $id]);
-                $pdo->commit();
-                $out($state());
-                return;
-
-            case 'orders':   // cari pembeli untuk mengisi nama tenda
-                $q = trim((string) ($in['q'] ?? ''));
-                if (mb_strlen($q) < 2) { $out(['orders' => []]); return; }
-                $like = '%' . addcslashes($q, '%_\\') . '%';
-                $st = $pdo->prepare("SELECT id, order_code, buyer_name, qty FROM orders
-                                     WHERE event_id = ? AND status = 'confirmed' AND (buyer_name LIKE ? OR order_code LIKE ?)
-                                     ORDER BY buyer_name LIMIT 10");
-                $st->execute([$eventId, $like, $like]);
-                $out(['orders' => $st->fetchAll()]);
-                return;
-        }
-        $fail('Aksi tidak dikenal.');
+        $extra = $action($in);
+        // Aksi 'orders' hanya mencari data; aksi lain mengembalikan denah terbaru.
+        tentRespond(['ok' => true] + ($extra ?: tentState($pdo, $eventId)));
+    } catch (TentException $e) {
+        tentRespond(['ok' => false, 'error' => $e->getMessage()], 400);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('tent-plot: ' . $e->getMessage());
-        $fail('Gagal menyimpan. Coba lagi.', 500);
+        tentRespond(['ok' => false, 'error' => 'Gagal menyimpan. Coba lagi.'], 500);
     }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    tentApi($pdo, $eventId);
+    tentHandleRequest($pdo, $eventId);
     exit;
 }
 

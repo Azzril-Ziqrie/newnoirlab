@@ -136,46 +136,6 @@ $pageSchemas = [
             z-index: 20;
         }
 
-        /* Countdown Style Minimalis */
-        .countdown-wrapper {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10vw; 
-            color: #000000; 
-            line-height: 1;
-            z-index: 5;
-            position: relative;
-        }
-
-        .intro-label-top {
-            position: absolute;
-            top: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: rgba(0, 0, 0, 0.3);
-            white-space: nowrap; /* Mencegah teks turun ke bawah */
-        }
-
-        @media (min-width: 1200px) {
-            .countdown-wrapper { font-size: 120px; }
-        }
-
-        .time-box {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-        }
-
-        .colon {
-            margin: 0 1vw;
-            transform: translateY(-8%);
-        }
-
         #tap-enter-btn {
             background: transparent;
             border: none;
@@ -185,7 +145,7 @@ $pageSchemas = [
             letter-spacing: 4px;
             cursor: pointer;
             z-index: 20;
-            margin-top: 100px;
+            margin-top: 20px;
             transition: all 0.3s ease;
             text-transform: uppercase;
         }
@@ -193,16 +153,6 @@ $pageSchemas = [
         #tap-enter-btn:hover {
             opacity: 0.5;
             transform: scale(1.05);
-        }
-
-        .time-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            position: absolute;
-            bottom: -30px;
-            color: rgba(0, 0, 0, 0.2);
         }
 
         /* =========================================
@@ -277,17 +227,8 @@ $pageSchemas = [
          @media (max-width: 900px) {
              .intro-logo { max-width: 120px; margin-bottom: 30px; }
 
-            .countdown-wrapper { font-size: 11.5vw; flex-wrap: nowrap; gap: 0; margin-top: 10px; width: 100%; padding: 0 10px; }
-            .colon { display: block; margin: 0 1vw; }
-            .time-label { font-size: 0.55rem; bottom: -20px; }
-            
-            /* Ubahan posisi dan ukuran intro-label-top khusus mobile */
-            .intro-label-top {
-                font-size: 0.5rem; /* Font dikecilkan */
-                top: -20px; /* Disesuaikan agar tidak terlalu jauh ke atas */
-            }
 
-            #tap-enter-btn { margin-top: 60px; font-size: 0.85rem; }
+            #tap-enter-btn { margin-top: 16px; font-size: 0.85rem; }
 
             .festival-header { margin: 24px 0 16px; }
             .festival-logo { max-width: 110px; }
@@ -309,29 +250,6 @@ $pageSchemas = [
     <div id="intro-screen">
         <img src="assets/logos/logo-bona1.png" alt="Bonafest '26" class="intro-logo">
         
-        <div class="countdown-wrapper">
-            <div class="intro-label-top">countdown to bonafest</div>
-            <div class="time-box">
-                <span id="cd-days">00</span>
-                <span class="time-label">Days</span>
-            </div>
-            <span class="colon">:</span>
-            <div class="time-box">
-                <span id="cd-hours">00</span>
-                <span class="time-label">Hours</span>
-            </div>
-            <span class="colon">:</span>
-            <div class="time-box">
-                <span id="cd-minutes">00</span>
-                <span class="time-label">Mins</span>
-            </div>
-            <span class="colon">:</span>
-            <div class="time-box">
-                <span id="cd-seconds">00</span>
-                <span class="time-label">Secs</span>
-            </div>
-        </div>
-
         <button id="tap-enter-btn" type="button">TAP TO ENTER</button>
     </div>
 
@@ -427,31 +345,6 @@ $pageSchemas = [
 
     <script src="assets/js/navbar.js"></script>
     <script>
-        // ==========================================
-        // LOGIKA COUNTDOWN TIMER
-        // ==========================================
-        const eventDate = new Date("Nov 7, 2026 00:00:00").getTime();
-
-        const timer = setInterval(() => {
-            const now = new Date().getTime();
-            const distance = eventDate - now;
-
-            if (distance < 0) {
-                clearInterval(timer);
-                return; 
-            }
-
-            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-            document.getElementById("cd-days").innerText = days < 10 ? "0" + days : days;
-            document.getElementById("cd-hours").innerText = hours < 10 ? "0" + hours : hours;
-            document.getElementById("cd-minutes").innerText = minutes < 10 ? "0" + minutes : minutes;
-            document.getElementById("cd-seconds").innerText = seconds < 10 ? "0" + seconds : seconds;
-        }, 1000);
-
         // ==========================================
         // LOGIKA TAP TO ENTER
         // ==========================================

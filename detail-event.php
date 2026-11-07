@@ -52,8 +52,16 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
 // Penjualan online ditutup: ubah ke true, daftar tiket diganti pengumuman beli lewat WhatsApp.
 // Nomor tidak ditulis utuh di HTML; baru muncul setelah tombol diklik (lihat skrip di bawah).
 $salesClosed = false;
-// Saat ditutup, hanya tier yang masih ada sisa kuota (diatur di dashboard) yang ditampilkan.
-$waTiers = array_values(array_filter($tickets, fn(array $t) => $t['quota'] - $t['sold'] > 0));
+const WA_BANK_NAME    = 'BCA';
+const WA_BANK_ACCOUNT = '4062092738';
+const WA_BANK_HOLDER  = 'Muchlas Yulianto';
+// Saat ditutup, hanya tier yang diaktifkan "Dijual via WhatsApp" di dashboard (ticket-manage) yang ditampilkan,
+// termasuk tier yang sudah sold out di web.
+$waTiers = [];
+if ($salesClosed) {
+    require_once 'lib/wa-sales.php';
+    $waTiers = waSellableTickets($pdo, $id);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -250,6 +258,16 @@ $waTiers = array_values(array_filter($tickets, fn(array $t) => $t['quota'] - $t[
         .wa-btn { display: inline-block; padding: 12px 18px; background: #000; color: #fff; border: 1px solid #000; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; text-decoration: none; }
         .wa-btn:hover { opacity: .75; }
         .wa-btn:disabled { background: #e0e0e0; border-color: #e0e0e0; color: #aaa; cursor: not-allowed; opacity: 1; }
+        .wa-pay { border: 1px solid #000; padding: 14px 16px; margin-bottom: 14px; font-size: 13px; }
+        .wa-pay p { color: #666; font-size: 12px; margin: 10px 0 0; }
+        .wa-total { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; }
+        .wa-total strong { font-size: 18px; }
+        .wa-bank { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+        .wa-bank strong { font-size: 15px; letter-spacing: 1px; }
+        .wa-copy { margin-left: auto; padding: 6px 10px; border: 1px solid #000; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .wa-copy:hover { background: #000; color: #fff; }
+        .wa-fields { display: grid; gap: 10px; margin-bottom: 14px; }
+        .wa-input { width: 100%; padding: 11px 14px; border: 1px solid #000; font-size: 13px; font-family: inherit; outline: none; background: #fff; }
         .wa-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid #e0e0e0; }
         .wa-row:last-of-type { margin-bottom: 16px; }
         @media (max-width: 580px) { .wa-row { flex-direction: column; align-items: flex-start; } }
@@ -342,25 +360,33 @@ $waTiers = array_values(array_filter($tickets, fn(array $t) => $t['quota'] - $t[
                         <strong>Online ticket sales are closed.</strong>
                         <p>Tickets can now only be purchased through WhatsApp. Choose your ticket and quantity, then tap the button.</p>
                         <?php if (!$waTiers): ?><p>No tickets are available right now.</p><?php endif; ?>
-                        <?php foreach ($waTiers as $t):
-                            $left = $t['quota'] - $t['sold'];
-                            $max  = min(10, $left); ?>
+                        <?php foreach ($waTiers as $t): ?>
                         <div class="wa-row">
                             <div>
                                 <div class="price-label"><?= htmlspecialchars($t['tier_name']) ?></div>
                                 <div class="price-val">Rp <?= number_format($t['price'], 0, ',', '.') ?> <span class="price-per">/ ticket</span></div>
                             </div>
-                            <?php if ($left <= 0): ?>
-                                <div class="sold-out-text">Sold Out</div>
-                            <?php else: ?>
-                                <select class="qty-select wa-qty" data-tier="<?= htmlspecialchars($t['tier_name']) ?>">
-                                    <option value="0">- Select qty -</option>
-                                    <?php for ($q = 1; $q <= $max; $q++): ?><option value="<?= $q ?>"><?= $q ?> ticket<?= $q > 1 ? 's' : '' ?></option><?php endfor; ?>
-                                </select>
-                            <?php endif; ?>
+                            <select class="qty-select wa-qty" data-tier="<?= htmlspecialchars($t['tier_name']) ?>" data-price="<?= (int) $t['price'] ?>">
+                                <option value="0">- Select qty -</option>
+                                <?php for ($q = 1; $q <= WA_MAX_QTY; $q++): ?><option value="<?= $q ?>"><?= $q ?> ticket<?= $q > 1 ? 's' : '' ?></option><?php endfor; ?>
+                            </select>
                         </div>
                         <?php endforeach; ?>
-                        <button type="button" class="wa-btn" id="wa-buy" disabled>Buy via WhatsApp</button>
+                        <div class="wa-pay" id="wa-pay" hidden>
+                            <div class="wa-total"><span>Total to transfer</span><strong id="wa-total">Rp 0</strong></div>
+                            <div class="wa-bank">
+                                <span><?= htmlspecialchars(WA_BANK_NAME) ?></span>
+                                <strong id="wa-account"><?= htmlspecialchars(WA_BANK_ACCOUNT) ?></strong>
+                                <span>a.n. <?= htmlspecialchars(WA_BANK_HOLDER) ?></span>
+                                <button type="button" class="wa-copy" id="wa-copy">Copy number</button>
+                            </div>
+                            <p>Transfer the exact total, then send your proof of transfer through WhatsApp.</p>
+                        </div>
+                        <div class="wa-fields">
+                            <input type="text" id="wa-name" class="wa-input" maxlength="100" placeholder="Full name" autocomplete="name" required>
+                            <input type="email" id="wa-email" class="wa-input" maxlength="150" placeholder="Email (your ticket is sent here)" autocomplete="email" required>
+                        </div>
+                        <button type="button" class="wa-btn" id="wa-buy" disabled>I want to send my transfer proof</button>
                     </div>
 
                 <?php elseif (empty($tickets)): ?>
@@ -612,16 +638,36 @@ function pesanTiket() {
     if (!btn) return;
     const qtys = document.querySelectorAll('.wa-qty');
     const pick = () => Array.from(qtys).find(s => parseInt(s.value) > 0);
+    const nameEl = document.getElementById('wa-name'), emailEl = document.getElementById('wa-email');
+    const emailOk = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    const payBox = document.getElementById('wa-pay'), totalEl = document.getElementById('wa-total');
+    const rupiah = n => 'Rp ' + n.toLocaleString('id-ID');
+    const totalOf = s => parseInt(s.value) * parseInt(s.dataset.price);
+    const refresh = () => {
+        const s = pick();
+        payBox.hidden = !s;
+        if (s) totalEl.textContent = rupiah(totalOf(s));
+        btn.disabled = !(s && nameEl.value.trim() && emailOk(emailEl.value.trim()));
+    };
+    document.getElementById('wa-copy').addEventListener('click', function () {
+        const num = document.getElementById('wa-account').textContent.trim();
+        if (navigator.clipboard) navigator.clipboard.writeText(num).then(() => { this.textContent = 'Copied'; });
+    });
     qtys.forEach(s => s.addEventListener('change', function () {
         // satu tier per pesan: pilihan tier lain direset
         if (parseInt(s.value) > 0) qtys.forEach(o => { if (o !== s) o.value = '0'; });
-        btn.disabled = !pick();
+        refresh();
     }));
+    nameEl.addEventListener('input', refresh);
+    emailEl.addEventListener('input', refresh);
     btn.addEventListener('click', function () {
         const s = pick();
-        if (!s) return;
+        if (!s || btn.disabled) return;
         const n = ['6289', '5386', '8475', '52'].join('');
-        const text = 'Haii, saya mau beli tiket ' + s.dataset.tier + ' sebanyak ' + s.value + ' yaa';
+        const text = 'Haii, saya ingin mengirim bukti transfer untuk tiket ' + s.dataset.tier + ' sebanyak ' + s.value + '\n'
+                   + 'Total: ' + rupiah(totalOf(s)) + '\n'
+                   + 'Nama: ' + nameEl.value.trim() + '\n'
+                   + 'Email: ' + emailEl.value.trim();
         window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
     });
 })();

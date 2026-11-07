@@ -58,6 +58,14 @@ if (in_array($_POST['action'] ?? '', ['toggle_promo', 'delete_promo'], true)) {
     $msg = $_POST['action'] === 'toggle_promo' ? 'Status link diperbarui.' : 'Link dihapus.';
 }
 
+// TIER DIJUAL VIA WHATSAPP (ya/tidak), dipakai saat penjualan online ditutup
+require_once '../lib/wa-sales.php';
+ensureWaColumn($pdo);
+if (($_POST['action'] ?? '') === 'toggle_wa') {
+    toggleWaSale($pdo, (int) ($_POST['ticket_id'] ?? 0), $eventId);
+    $msg = 'Status penjualan WhatsApp diperbarui.';
+}
+
 // TAMBAH TIER
 if (isset($_POST['action']) && $_POST['action'] === 'add') {
     $tier  = trim($_POST['tier_name']);
@@ -424,6 +432,14 @@ $pendingOrders = $pdo->query("SELECT COUNT(*) FROM orders WHERE status='pending'
 
                         <div class="tier-actions">
                             <button type="button" class="btn btn-blue" onclick="toggleEdit(<?= (int)$t['id'] ?>)">Edit</button>
+                            <form method="POST" style="display:inline">
+                                <input type="hidden" name="action" value="toggle_wa">
+                                <input type="hidden" name="ticket_id" value="<?= (int)$t['id'] ?>">
+                                <button type="submit" class="btn <?= !empty($t['wa_open']) ? 'btn-blue' : 'btn-ghost' ?>"
+                                        title="Tier ini ditampilkan di tombol beli WhatsApp saat penjualan online ditutup">
+                                    WhatsApp: <?= !empty($t['wa_open']) ? 'Dijual' : 'Tidak dijual' ?>
+                                </button>
+                            </form>
                             <a href="?event_id=<?= $eventId ?>&delete_ticket=<?= (int)$t['id'] ?>"
                                class="btn btn-red"
                                onclick='return confirm(<?= htmlspecialchars(json_encode('Hapus tier ' . $t['tier_name'] . '?'), ENT_QUOTES) ?>)'>
