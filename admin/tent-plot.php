@@ -22,6 +22,7 @@ function tentActions(PDO $pdo, int $eventId): array
     return [
         'load'      => fn(array $in) => [],
         'save_plot' => function (array $in) use ($pdo, $eventId) { tentSavePlot($pdo, $eventId, (int) ($in['rows'] ?? 0), (int) ($in['cols'] ?? 0), (string) ($in['front'] ?? '')); return []; },
+        'seed'      => function (array $in) use ($pdo, $eventId) { tentSeedBonafest($pdo, $eventId); return []; },
         'fill'      => function (array $in) use ($pdo, $eventId) { tentFillEmptyCells($pdo, $eventId); return []; },
         'add'       => function (array $in) use ($pdo, $eventId) { tentAddAt($pdo, $eventId, (int) ($in['r'] ?? -1), (int) ($in['c'] ?? -1)); return []; },
         'save'      => function (array $in) use ($pdo, $eventId) { tentUpdate($pdo, $eventId, (int) ($in['id'] ?? 0), $in); return []; },
@@ -151,7 +152,17 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#000; color:#fff; padding:11px 20px; font-size:.85rem; font-weight:600; display:none; z-index:50; }
         .toast.err { background:#b00020; }
         @media (max-width:1100px) { .layout { grid-template-columns:1fr; } .panel { position:static; } }
-        @media (max-width:860px) { .sidebar { display:none; } .main { margin-left:0; padding:28px 16px; } .board { padding:14px; } .grid { --cell:64px; } }
+        @media (max-width:860px) {
+            .sidebar { display:none; } .main { margin-left:0; padding:28px 16px; } .board { padding:14px; }
+            .grid { --cell:52px; gap:4px; } .tent .nm { font-size:.56rem; } .tent .lab { font-size:.7rem; }
+            .tf input, .tf select, .tf textarea { font-size:16px; }   /* 16px: iOS tidak zoom saat input diketuk */
+            .panel { position:fixed; left:0; right:0; bottom:0; top:auto; max-height:55vh; overflow:auto; z-index:40; background:#fff; border:0; border-top:1px solid #000; box-shadow:0 -8px 24px rgba(0,0,0,.15); padding:16px; display:none; }
+            body.has-sel .panel { display:block; }
+            body.moving .panel { display:none; }
+            body.has-sel .main { padding-bottom:60vh; }   /* ruang supaya baris terbawah tidak tertutup panel */
+            .mobile-only { display:inline-block !important; }
+        }
+        .mobile-only { display:none; }
         @media print {
             .toolbar, .panel, .stats, .page-header p { display:none !important; }
             .layout { display:block; } .board { border:0; padding:0; }
@@ -179,6 +190,7 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         <div class="tf"><label for="inFront">Label depan</label><input type="text" id="inFront" maxlength="60" placeholder="STAGE"></div>
         <button class="tbtn" id="btnPlot" type="button">Terapkan ukuran</button>
         <button class="tbtn" id="btnFill" type="button">Isi semua sel dengan tenda</button>
+        <button class="tbtn primary" id="btnSeed" type="button" hidden>Muat denah awal BONAFEST (99 tenda)</button>
         <div class="tf" style="margin-left:auto"><label for="inFind">Cari tamu / tenda</label><input type="search" id="inFind" placeholder="Nama atau A3…"></div>
         <button class="tbtn" type="button" onclick="window.print()">Cetak</button>
     </div>
@@ -204,7 +216,7 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 <script>
 (() => {
     const CSRF = <?= json_encode($_SESSION['csrf']) ?>;
-    let plot = { rows: 0, cols: 0, front: '' }, tents = [], selId = null, drag = null;
+    let plot = { rows: 0, cols: 0, front: '' }, tents = [], selId = null, drag = null, moveId = null;
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const rowLetter = i => { let s = ''; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
@@ -263,6 +275,8 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         const total = tents.length, usable = tents.filter(t => t.status !== 'blocked'), taken = tents.filter(isTaken);
         $('stats').innerHTML = `<span><b>${total}</b>tenda</span><span><b>${taken.length}</b>terisi</span><span><b>${usable.length - taken.length}</b>kosong</span>`
             + `<span><b>${tents.filter(t => t.status === 'blocked').length}</b>tidak dipakai</span><span><b>${taken.reduce((s, t) => s + (t.pax || 0), 0)}</b>orang</span>`;
+        $('btnSeed').hidden = tents.length > 0;
+        document.body.classList.toggle('has-sel', selId !== null);
         renderPanel();
     }
 
@@ -281,13 +295,16 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
             </div>
             <div class="tf"><label for="fStatus">Status</label><select id="fStatus"><option value="free">Dipakai</option><option value="blocked"${t.status === 'blocked' ? ' selected' : ''}>Tidak dipakai</option></select></div>
             <div class="tf"><label for="fNote">Catatan</label><textarea id="fNote" rows="2" maxlength="255">${esc(t.note)}</textarea></div>
-            <div class="actions"><button class="tbtn primary" id="fSave" type="button">Simpan</button><button class="tbtn danger" id="fDel" type="button">Hapus tenda</button></div>`;
+            <div class="actions"><button class="tbtn primary" id="fSave" type="button">Simpan</button><button class="tbtn danger" id="fDel" type="button">Hapus tenda</button></div>
+            <div class="actions"><button class="tbtn" id="fMove" type="button">Pindahkan</button><button class="tbtn mobile-only" id="fClose" type="button">Tutup</button></div>`;
 
         let orderId = t.order_id, orderCode = t.order_code, timer;
         $('fSave').onclick = async () => {
             apply(await api('save', { id: t.id, label: $('fLabel').value, guest: $('fGuest').value, pax: $('fPax').value, note: $('fNote').value,
                                       status: $('fStatus').value, order_id: orderId, order_code: orderCode })) && toast('Tersimpan.');
         };
+        $('fMove').onclick = () => { moveId = t.id; document.body.classList.add('moving'); toast('Ketuk sel tujuan. Ketuk tenda ini lagi untuk batal.'); };
+        $('fClose').onclick = () => { selId = null; render(); };
         $('fDel').onclick = async () => { if (confirm('Hapus tenda ' + t.label + '? Tenda kembali jadi lorong.')) apply(await api('delete', { id: t.id })); };
         p.querySelectorAll('input[type=text],input[type=number]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') $('fSave').click(); }));
         const un = $('unlink'); if (un) un.onclick = e => { e.preventDefault(); orderId = orderCode = null; $('linked').textContent = 'Link order dilepas (tekan Simpan).'; };
@@ -312,6 +329,12 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
     // Klik, seret, dan pindah
     $('grid').addEventListener('click', async e => {
         const b = e.target.closest('.cell'); if (!b) return;
+        if (moveId !== null) {   // mode pindah (layar sentuh tidak bisa drag): ketuk sel tujuan
+            const id = moveId; moveId = null; document.body.classList.remove('moving');
+            if (+b.dataset.id === id) { render(); return; }
+            selId = id; apply(await api('move', { id, r: +b.dataset.r, c: +b.dataset.c }));
+            return;
+        }
         if (b.dataset.id) { selId = +b.dataset.id; render(); return; }
         const j = await api('add', { r: +b.dataset.r, c: +b.dataset.c });
         if (j) { const t = j.tents.find(x => x.r === +b.dataset.r && x.c === +b.dataset.c); selId = t ? t.id : null; apply(j); const g = $('fGuest'); if (g) g.focus(); }
@@ -337,6 +360,11 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
     $('btnFill').onclick = async () => {
         if (!confirm('Pasang tenda di semua sel kosong? Tenda yang sudah ada tidak berubah.')) return;
         apply(await api('fill')) && toast('Sel kosong sudah diisi tenda.');
+    };
+
+    $('btnSeed').onclick = async () => {
+        if (!confirm('Muat denah awal dari sketsa (99 tenda, nomor 1-102 tanpa 33, 60, 61)? Posisi bisa digeser setelahnya.')) return;
+        apply(await api('seed')) && toast('Denah awal dimuat.');
     };
 
     api('load').then(apply);

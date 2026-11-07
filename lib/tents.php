@@ -197,3 +197,55 @@ function tentSearchOrders(PDO $pdo, int $eventId, string $query): array
     $st->execute([$eventId, $like, $like]);
     return $st->fetchAll();
 }
+
+/**
+ * Denah awal BONAFEST dari sketsa tangan: [baris => [kolom => nomor tenda]].
+ * Nomor 1-102 tanpa 33, 60, 61 (ditiadakan) = 99 tenda. Posisi kira-kira, bisa digeser di editor.
+ */
+const TENT_BONAFEST_ROWS = 20;
+const TENT_BONAFEST_COLS = 17;
+
+function tentBonafestLayout(): array
+{
+    return [
+        0  => [2 => '1', 3 => '2', 4 => '3', 5 => '4', 10 => '99', 11 => '100', 12 => '101', 13 => '102'],
+        1  => [5 => '5', 10 => '98', 11 => '97', 12 => '96', 13 => '95'],
+        2  => [2 => '9', 3 => '8', 4 => '7', 5 => '6', 10 => '89', 11 => '90', 12 => '91', 14 => '92', 15 => '93', 16 => '94'],
+        3  => [2 => '10', 3 => '11', 4 => '12', 5 => '13', 10 => '88', 11 => '87', 12 => '86', 13 => '85', 14 => '84'],
+        4  => [1 => '18', 2 => '17', 3 => '16', 4 => '15', 5 => '14'],
+        5  => [2 => '19', 3 => '20', 4 => '21', 5 => '22', 16 => '83'],
+        6  => [3 => '25', 4 => '24', 5 => '23', 16 => '82'],
+        7  => [10 => '75', 11 => '76', 12 => '77', 13 => '78', 14 => '79', 15 => '80', 16 => '81'],
+        8  => [0 => '26', 1 => '27', 2 => '28', 10 => '74', 11 => '73', 12 => '72', 13 => '71', 14 => '70'],
+        9  => [0 => '32', 1 => '31', 2 => '30', 3 => '29', 10 => '65', 11 => '66', 12 => '67', 13 => '68', 14 => '69'],
+        10 => [0 => '36', 1 => '35', 2 => '34', 10 => '63', 11 => '64'],
+        11 => [0 => '37', 1 => '38', 2 => '39', 10 => '62'],
+        12 => [0 => '40', 1 => '41'],
+        14 => [8 => '42', 9 => '43', 10 => '44', 11 => '45', 12 => '46', 13 => '47', 14 => '48', 15 => '49', 16 => '50'],
+        15 => [8 => '56', 9 => '55', 12 => '54', 13 => '53', 14 => '52', 16 => '51'],
+        17 => [16 => '57'],
+        18 => [16 => '58'],
+        19 => [16 => '59'],
+    ];
+}
+
+/** Muat denah awal BONAFEST. Hanya jalan bila belum ada tenda, supaya tidak menimpa data yang sudah diisi. */
+function tentSeedBonafest(PDO $pdo, int $eventId): void
+{
+    $count = $pdo->prepare("SELECT COUNT(*) FROM tents WHERE event_id = ?");
+    $count->execute([$eventId]);
+    if ((int) $count->fetchColumn() > 0) {
+        throw new TentException('Denah sudah berisi tenda. Hapus dulu tendanya bila ingin memuat denah awal.');
+    }
+
+    tentSavePlot($pdo, $eventId, TENT_BONAFEST_ROWS, TENT_BONAFEST_COLS, '');
+
+    $insert = $pdo->prepare("INSERT INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)");
+    $pdo->beginTransaction();
+    foreach (tentBonafestLayout() as $row => $cells) {
+        foreach ($cells as $col => $label) {
+            $insert->execute([$eventId, $row, $col, $label]);
+        }
+    }
+    $pdo->commit();
+}
