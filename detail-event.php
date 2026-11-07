@@ -55,13 +55,16 @@ $salesClosed = false;
 const WA_BANK_NAME    = 'BCA';
 const WA_BANK_ACCOUNT = '4062092738';
 const WA_BANK_HOLDER  = 'Muchlas Yulianto';
-// Saat ditutup, hanya tier yang diaktifkan "Dijual via WhatsApp" di dashboard (ticket-manage) yang ditampilkan,
-// termasuk tier yang sudah sold out di web.
-$waTiers = [];
-if ($salesClosed) {
-    require_once 'lib/wa-sales.php';
+// Tier yang diaktifkan "Dijual via WhatsApp" di dashboard (ticket-manage), termasuk yang sudah sold out di web.
+require_once 'lib/wa-sales.php';
+try {
     $waTiers = waSellableTickets($pdo, $id);
+} catch (Throwable $err) {
+    error_log('wa-sales: ' . $err->getMessage());
+    $waTiers = [];
 }
+// Mode WhatsApp menyala bila web ditutup, atau semua tiket web sudah habis dan ada tier yang dijual via WhatsApp.
+$waMode = $salesClosed || ($allSoldOut && $waTiers);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -355,9 +358,9 @@ if ($salesClosed) {
                     <div class="promo-note is-invalid">This special price link is no longer valid or has run out. Regular prices apply.</div>
                 <?php endif; ?>
 
-                <?php if ($salesClosed): ?>
+                <?php if ($waMode): ?>
                     <div class="wa-notice">
-                        <strong>Online ticket sales are closed.</strong>
+                        <strong><?= $salesClosed ? 'Online ticket sales are closed.' : 'Online tickets are sold out.' ?></strong>
                         <p>Tickets can now only be purchased through WhatsApp. Choose your ticket and quantity, then tap the button.</p>
                         <?php if (!$waTiers): ?><p>No tickets are available right now.</p><?php endif; ?>
                         <?php foreach ($waTiers as $t): ?>
@@ -508,7 +511,7 @@ if ($salesClosed) {
                 </div>
             </div>
 
-            <?php if ($isUpcoming && !$salesClosed && !empty($tickets) && !$allSoldOut): ?>
+            <?php if ($isUpcoming && !$waMode && !empty($tickets) && !$allSoldOut): ?>
             <div class="summary-card">
                 <div class="summary-fee" id="summary-fee-wrap" style="display:none;">
                     <div class="fee-row"><span>Subtotal</span><span id="summary-subtotal">Rp 0</span></div>
