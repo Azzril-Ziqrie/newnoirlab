@@ -48,6 +48,12 @@ $eventSummary  = !empty($e['description'])
 
 // Cek apakah semua tiket sold out
 $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carry && ($t['sold'] >= $t['quota']), true);
+
+// Penjualan online ditutup: ubah ke true, daftar tiket diganti pengumuman beli lewat WhatsApp.
+// Nomor tidak ditulis utuh di HTML; baru muncul setelah tombol diklik (lihat skrip di bawah).
+$salesClosed = false;
+// Saat ditutup, hanya tier yang masih ada sisa kuota (diatur di dashboard) yang ditampilkan.
+$waTiers = array_values(array_filter($tickets, fn(array $t) => $t['quota'] - $t['sold'] > 0));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -237,6 +243,17 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
             display: none;
         }
 
+        /* Pengumuman beli lewat WhatsApp */
+        .wa-notice { border: 1px solid #000; padding: 20px; font-size: 13px; line-height: 1.7; }
+        .wa-notice strong { display: block; font-size: 14px; margin-bottom: 4px; }
+        .wa-notice p { color: #444; margin-bottom: 14px; }
+        .wa-btn { display: inline-block; padding: 12px 18px; background: #000; color: #fff; border: 1px solid #000; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; font-family: inherit; text-decoration: none; }
+        .wa-btn:hover { opacity: .75; }
+        .wa-btn:disabled { background: #e0e0e0; border-color: #e0e0e0; color: #aaa; cursor: not-allowed; opacity: 1; }
+        .wa-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid #e0e0e0; }
+        .wa-row:last-of-type { margin-bottom: 16px; }
+        @media (max-width: 580px) { .wa-row { flex-direction: column; align-items: flex-start; } }
+
         /* --- RESPONSIVE --- */
         @media (max-width: 860px) {
             .event-layout { grid-template-columns: 1fr; }
@@ -320,7 +337,33 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
                     <div class="promo-note is-invalid">This special price link is no longer valid or has run out. Regular prices apply.</div>
                 <?php endif; ?>
 
-                <?php if (empty($tickets)): ?>
+                <?php if ($salesClosed): ?>
+                    <div class="wa-notice">
+                        <strong>Online ticket sales are closed.</strong>
+                        <p>Tickets can now only be purchased through WhatsApp. Choose your ticket and quantity, then tap the button.</p>
+                        <?php if (!$waTiers): ?><p>No tickets are available right now.</p><?php endif; ?>
+                        <?php foreach ($waTiers as $t):
+                            $left = $t['quota'] - $t['sold'];
+                            $max  = min(10, $left); ?>
+                        <div class="wa-row">
+                            <div>
+                                <div class="price-label"><?= htmlspecialchars($t['tier_name']) ?></div>
+                                <div class="price-val">Rp <?= number_format($t['price'], 0, ',', '.') ?> <span class="price-per">/ ticket</span></div>
+                            </div>
+                            <?php if ($left <= 0): ?>
+                                <div class="sold-out-text">Sold Out</div>
+                            <?php else: ?>
+                                <select class="qty-select wa-qty" data-tier="<?= htmlspecialchars($t['tier_name']) ?>">
+                                    <option value="0">- Select qty -</option>
+                                    <?php for ($q = 1; $q <= $max; $q++): ?><option value="<?= $q ?>"><?= $q ?> ticket<?= $q > 1 ? 's' : '' ?></option><?php endfor; ?>
+                                </select>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                        <button type="button" class="wa-btn" id="wa-buy" disabled>Buy via WhatsApp</button>
+                    </div>
+
+                <?php elseif (empty($tickets)): ?>
                     <p class="no-ticket-msg">Ticket information not yet available.</p>
 
                 <?php elseif ($allSoldOut): ?>
@@ -439,7 +482,7 @@ $allSoldOut = !empty($tickets) && array_reduce($tickets, fn($carry, $t) => $carr
                 </div>
             </div>
 
-            <?php if ($isUpcoming && !empty($tickets) && !$allSoldOut): ?>
+            <?php if ($isUpcoming && !$salesClosed && !empty($tickets) && !$allSoldOut): ?>
             <div class="summary-card">
                 <div class="summary-fee" id="summary-fee-wrap" style="display:none;">
                     <div class="fee-row"><span>Subtotal</span><span id="summary-subtotal">Rp 0</span></div>
@@ -562,6 +605,26 @@ function pesanTiket() {
     document.getElementById('cf-total').value      = total + calcFee(total);
     document.getElementById('checkout-form').submit();
 }
+
+// Beli lewat WhatsApp: nomor disusun saat tombol diklik, jadi tidak ada di HTML (menyulitkan scraper).
+(function () {
+    const btn = document.getElementById('wa-buy');
+    if (!btn) return;
+    const qtys = document.querySelectorAll('.wa-qty');
+    const pick = () => Array.from(qtys).find(s => parseInt(s.value) > 0);
+    qtys.forEach(s => s.addEventListener('change', function () {
+        // satu tier per pesan: pilihan tier lain direset
+        if (parseInt(s.value) > 0) qtys.forEach(o => { if (o !== s) o.value = '0'; });
+        btn.disabled = !pick();
+    }));
+    btn.addEventListener('click', function () {
+        const s = pick();
+        if (!s) return;
+        const n = ['6289', '5386', '8475', '52'].join('');
+        const text = 'Haii, saya mau beli tiket ' + s.dataset.tier + ' sebanyak ' + s.value + ' yaa';
+        window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+    });
+})();
 
 // Active nav link
 document.addEventListener('DOMContentLoaded', function () {

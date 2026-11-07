@@ -15,7 +15,7 @@ function adminNavItems(): array
         'Events'   => [['event-add', 'Add Event', 'event-add']],
         'Sales'    => [['orders', 'Orders', 'orders'], ['ots-buy', 'On-the-spot', 'ots-buy'],
                        ['resend-email', 'Resend Email', 'resend-email'], ['announce', 'Announcement', 'announce']],
-        'Door'     => [['scan-tiket', 'Scan Ticket', 'scan-tiket']],
+        'Door'     => [['scan-tiket', 'Scan Ticket', 'scan-tiket'], ['tent-plot', 'Tent Plot', 'tent-plot']],
         'Reports'  => [['report-event', 'Event Report', 'report-event'], ['gear-recap', 'Equipment Recap', 'gear-recap']],
         'Settings' => [['manage-admin', 'Manage Admins', 'manage-admin']],
     ];
