@@ -42,26 +42,22 @@ function ensureTentTables(PDO $pdo): void
     $done = true;
 }
 
-/** 0 → A, 25 → Z, 26 → AA */
-function tentRowLetter(int $i): string
-{
-    $s = '';
-    for ($i++; $i > 0; $i = intdiv($i - 1, 26)) {
-        $s = chr(65 + ($i - 1) % 26) . $s;
-    }
-    return $s;
-}
+/** Kesalahan yang aman ditampilkan ke admin (bukan bug server). */
+class TentException extends RuntimeException {}
 
-function tentDefaultLabel(int $row, int $col): string
+/** Nomor tenda berikutnya: nomor terbesar yang sudah dipakai + 1. */
+function tentNextNumber(PDO $pdo, int $eventId): int
 {
-    return tentRowLetter($row) . ($col + 1);
+    $st = $pdo->prepare("SELECT COALESCE(MAX(CAST(label AS UNSIGNED)), 0) + 1 FROM tents WHERE event_id = ? AND label REGEXP '^[0-9]+$'");
+    $st->execute([$eventId]);
+    return (int) $st->fetchColumn();
 }
 
 function tentGetPlot(PDO $pdo, int $eventId): array
 {
     $st = $pdo->prepare("SELECT rows_count, cols_count, front_label FROM tent_plots WHERE event_id = ?");
     $st->execute([$eventId]);
-    $p = $st->fetch() ?: ['rows_count' => 6, 'cols_count' => 10, 'front_label' => 'STAGE'];
+    $p = $st->fetch() ?: ['rows_count' => TENT_BONAFEST_ROWS, 'cols_count' => TENT_BONAFEST_COLS, 'front_label' => ''];
     return ['rows' => (int) $p['rows_count'], 'cols' => (int) $p['cols_count'], 'front' => (string) $p['front_label']];
 }
 
@@ -76,9 +72,6 @@ function tentList(PDO $pdo, int $eventId): array
         return $t;
     }, $st->fetchAll());
 }
-
-/** Kesalahan yang aman ditampilkan ke admin (bukan bug server). */
-class TentException extends RuntimeException {}
 
 function tentState(PDO $pdo, int $eventId): array
 {
@@ -120,9 +113,11 @@ function tentFillEmptyCells(PDO $pdo, int $eventId): void
     $insert = $pdo->prepare("INSERT IGNORE INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)");
 
     $pdo->beginTransaction();
+    $number = tentNextNumber($pdo, $eventId);
     for ($row = 0; $row < $plot['rows']; $row++) {
         for ($col = 0; $col < $plot['cols']; $col++) {
-            $insert->execute([$eventId, $row, $col, tentDefaultLabel($row, $col)]);
+            $insert->execute([$eventId, $row, $col, (string) $number]);
+            if ($insert->rowCount() > 0) $number++;   // sel yang sudah berisi tenda tidak memakai nomor
         }
     }
     $pdo->commit();
@@ -132,7 +127,7 @@ function tentAddAt(PDO $pdo, int $eventId, int $row, int $col): void
 {
     tentRequireCell($pdo, $eventId, $row, $col);
     $pdo->prepare("INSERT IGNORE INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)")
-        ->execute([$eventId, $row, $col, tentDefaultLabel($row, $col)]);
+        ->execute([$eventId, $row, $col, (string) tentNextNumber($pdo, $eventId)]);
 }
 
 function tentUpdate(PDO $pdo, int $eventId, int $tentId, array $in): void
@@ -200,7 +195,7 @@ function tentSearchOrders(PDO $pdo, int $eventId, string $query): array
 
 /**
  * Denah awal BONAFEST dari sketsa tangan: [baris => [kolom => nomor tenda]].
- * Nomor 1-102 tanpa 33, 60, 61 (ditiadakan) = 99 tenda. Posisi kira-kira, bisa digeser di editor.
+ * Nomor 1-102 tanpa 33, 60, 61 (ditiadakan) = 99 tenda. Tersusun rapi baris-kolom seperti kursi bioskop.
  */
 const TENT_BONAFEST_ROWS = 20;
 const TENT_BONAFEST_COLS = 17;
@@ -216,16 +211,17 @@ function tentBonafestLayout(): array
         5  => [2 => '19', 3 => '20', 4 => '21', 5 => '22', 16 => '83'],
         6  => [3 => '25', 4 => '24', 5 => '23', 16 => '82'],
         7  => [10 => '75', 11 => '76', 12 => '77', 13 => '78', 14 => '79', 15 => '80', 16 => '81'],
-        8  => [0 => '26', 1 => '27', 2 => '28', 10 => '74', 11 => '73', 12 => '72', 13 => '71', 14 => '70'],
-        9  => [0 => '32', 1 => '31', 2 => '30', 3 => '29', 10 => '65', 11 => '66', 12 => '67', 13 => '68', 14 => '69'],
-        10 => [0 => '36', 1 => '35', 2 => '34', 10 => '63', 11 => '64'],
-        11 => [0 => '37', 1 => '38', 2 => '39', 10 => '62'],
-        12 => [0 => '40', 1 => '41'],
-        14 => [8 => '42', 9 => '43', 10 => '44', 11 => '45', 12 => '46', 13 => '47', 14 => '48', 15 => '49', 16 => '50'],
-        15 => [8 => '56', 9 => '55', 12 => '54', 13 => '53', 14 => '52', 16 => '51'],
-        17 => [16 => '57'],
-        18 => [16 => '58'],
-        19 => [16 => '59'],
+        8  => [10 => '74', 11 => '73', 12 => '72', 13 => '71', 14 => '70'],
+        9  => [0 => '26', 1 => '27', 2 => '28', 10 => '65', 11 => '66', 12 => '67', 13 => '68', 14 => '69'],
+        10  => [0 => '32', 1 => '31', 2 => '30', 3 => '29', 10 => '63', 11 => '64'],
+        11  => [0 => '36', 1 => '35', 2 => '34', 10 => '62'],
+        12  => [0 => '37', 1 => '38', 2 => '39'],
+        13  => [0 => '40', 1 => '41'],
+        14  => [8 => '42', 9 => '43', 10 => '44', 11 => '45', 12 => '46', 13 => '47', 14 => '48', 15 => '49', 16 => '50'],
+        15  => [8 => '56', 9 => '55', 12 => '54', 13 => '53', 14 => '52', 16 => '51'],
+        17  => [16 => '57'],
+        18  => [16 => '58'],
+        19  => [16 => '59'],
     ];
 }
 
@@ -240,7 +236,7 @@ function tentSeedBonafest(PDO $pdo, int $eventId): void
 
     tentSavePlot($pdo, $eventId, TENT_BONAFEST_ROWS, TENT_BONAFEST_COLS, '');
 
-    $insert = $pdo->prepare("INSERT INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)");
+    $insert = $pdo->prepare("INSERT IGNORE INTO tents (event_id, row_idx, col_idx, label) VALUES (?,?,?,?)");
     $pdo->beginTransaction();
     foreach (tentBonafestLayout() as $row => $cells) {
         foreach ($cells as $col => $label) {
@@ -248,4 +244,33 @@ function tentSeedBonafest(PDO $pdo, int $eventId): void
         }
     }
     $pdo->commit();
+}
+
+/** Kosongkan denah (semua tenda dan ukurannya) lalu muat ulang denah awal BONAFEST. Nama tamu yang sudah diisi ikut hilang. */
+function tentResetToBonafest(PDO $pdo, int $eventId): void
+{
+    $pdo->beginTransaction();
+    $pdo->prepare("DELETE FROM tents WHERE event_id = ?")->execute([$eventId]);
+    $pdo->prepare("DELETE FROM tent_plots WHERE event_id = ?")->execute([$eventId]);
+    $pdo->commit();
+
+    tentSeedBonafest($pdo, $eventId);
+}
+
+/**
+ * Denah yang belum pernah diatur (belum ada baris tent_plots) langsung diisi denah awal saat halaman dibuka,
+ * jadi tenda bernomor sudah tampil tanpa klik apa pun. Setelah denah diatur sekali, tidak diisi ulang
+ * (menghapus semua tenda tidak memunculkan denah awal lagi; tombol "Muat denah awal" tetap tersedia).
+ */
+function tentSeedIfUnconfigured(PDO $pdo, int $eventId): void
+{
+    $configured = $pdo->prepare("SELECT 1 FROM tent_plots WHERE event_id = ?");
+    $configured->execute([$eventId]);
+    if ($configured->fetchColumn()) return;
+
+    try {
+        tentSeedBonafest($pdo, $eventId);
+    } catch (TentException $e) {
+        // sudah ada tenda (mis. dimuat dari permintaan lain): tidak ada yang perlu dilakukan
+    }
 }

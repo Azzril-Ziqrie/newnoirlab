@@ -20,9 +20,10 @@ $eventId = $event ? (int) $event['id'] : 0;
 function tentActions(PDO $pdo, int $eventId): array
 {
     return [
-        'load'      => fn(array $in) => [],
+        'load'      => function (array $in) use ($pdo, $eventId) { tentSeedIfUnconfigured($pdo, $eventId); return []; },
         'save_plot' => function (array $in) use ($pdo, $eventId) { tentSavePlot($pdo, $eventId, (int) ($in['rows'] ?? 0), (int) ($in['cols'] ?? 0), (string) ($in['front'] ?? '')); return []; },
         'seed'      => function (array $in) use ($pdo, $eventId) { tentSeedBonafest($pdo, $eventId); return []; },
+        'reset'     => function (array $in) use ($pdo, $eventId) { tentResetToBonafest($pdo, $eventId); return []; },
         'fill'      => function (array $in) use ($pdo, $eventId) { tentFillEmptyCells($pdo, $eventId); return []; },
         'add'       => function (array $in) use ($pdo, $eventId) { tentAddAt($pdo, $eventId, (int) ($in['r'] ?? -1), (int) ($in['c'] ?? -1)); return []; },
         'save'      => function (array $in) use ($pdo, $eventId) { tentUpdate($pdo, $eventId, (int) ($in['id'] ?? 0), $in); return []; },
@@ -115,17 +116,13 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         .layout { display:grid; grid-template-columns:1fr 340px; gap:24px; align-items:start; }
         .board { border:1px solid #e5e5e5; padding:24px; overflow:auto; }
         .front { text-align:center; font-size:.7rem; font-weight:800; letter-spacing:6px; padding:10px; background:#000; color:#fff; margin:0 auto 26px; max-width:100%; clip-path:polygon(4% 0,96% 0,100% 100%,0 100%); }
-        .grid { display:grid; gap:6px; width:max-content; margin:0 auto; --cell:74px; }
-        .rowlab, .collab { font-size:.65rem; font-weight:700; color:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; }
-        .rowlab { width:24px; }
-        .collab { height:20px; }
+
+        .grid { display:grid; gap:6px; width:max-content; margin:0 auto; --cell:54px; }
         .cell { width:var(--cell); height:var(--cell); border:1px dashed rgba(0,0,0,.12); background:transparent; cursor:pointer; padding:0; font-family:inherit; }
         .cell:hover { border-color:#000; }
-        .tent { border:1.5px solid #000; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px; position:relative; clip-path:none; }
-        .tent .lab { font-size:.62rem; font-weight:800; letter-spacing:.5px; color:rgba(0,0,0,.5); }
-        .tent .nm { font-size:.68rem; font-weight:700; line-height:1.15; max-width:100%; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word; }
+        .tent { border:1.5px solid #000; background:#fff; color:#000; display:flex; align-items:center; justify-content:center; }   /* kotak putih polos bernomor */
+        .tent .lab { font-size:1rem; font-weight:700; line-height:1; }
         .tent.taken { background:#000; color:#fff; }
-        .tent.taken .lab { color:rgba(255,255,255,.6); }
         .tent.blocked { background:repeating-linear-gradient(45deg,#f1f1f1,#f1f1f1 6px,#e2e2e2 6px,#e2e2e2 12px); border-color:rgba(0,0,0,.25); color:rgba(0,0,0,.35); }
         .tent.sel { outline:3px solid #2563eb; outline-offset:2px; }
         .tent.hit { box-shadow:0 0 0 4px #facc15; }
@@ -154,7 +151,7 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         @media (max-width:1100px) { .layout { grid-template-columns:1fr; } .panel { position:static; } }
         @media (max-width:860px) {
             .sidebar { display:none; } .main { margin-left:0; padding:28px 16px; } .board { padding:14px; }
-            .grid { --cell:52px; gap:4px; } .tent .nm { font-size:.56rem; } .tent .lab { font-size:.7rem; }
+            .grid { --cell:42px; gap:4px; } .tent .lab { font-size:.85rem; }
             .tf input, .tf select, .tf textarea { font-size:16px; }   /* 16px: iOS tidak zoom saat input diketuk */
             .panel { position:fixed; left:0; right:0; bottom:0; top:auto; max-height:55vh; overflow:auto; z-index:40; background:#fff; border:0; border-top:1px solid #000; box-shadow:0 -8px 24px rgba(0,0,0,.15); padding:16px; display:none; }
             body.has-sel .panel { display:block; }
@@ -191,7 +188,8 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         <button class="tbtn" id="btnPlot" type="button">Terapkan ukuran</button>
         <button class="tbtn" id="btnFill" type="button">Isi semua sel dengan tenda</button>
         <button class="tbtn primary" id="btnSeed" type="button" hidden>Muat denah awal BONAFEST (99 tenda)</button>
-        <div class="tf" style="margin-left:auto"><label for="inFind">Cari tamu / tenda</label><input type="search" id="inFind" placeholder="Nama atau A3…"></div>
+        <button class="tbtn danger" id="btnReset" type="button" title="Hapus semua tenda lalu muat ulang denah awal dari sketsa">Reset ke denah awal</button>
+        <div class="tf" style="margin-left:auto"><label for="inFind">Cari tamu / tenda</label><input type="search" id="inFind" placeholder="Nomor atau nama…"></div>
         <button class="tbtn" type="button" onclick="window.print()">Cetak</button>
     </div>
 
@@ -219,7 +217,6 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
     let plot = { rows: 0, cols: 0, front: '' }, tents = [], selId = null, drag = null, moveId = null;
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const rowLetter = i => { let s = ''; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
 
     function toast(msg, err) {
         const t = $('toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.style.display = 'block';
@@ -255,19 +252,17 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         const q = $('inFind').value.trim().toLowerCase();
         const cells = byCell();
         const g = $('grid');
-        g.style.gridTemplateColumns = `24px repeat(${plot.cols}, var(--cell))`;
-        let html = '<div></div>';
-        for (let c = 0; c < plot.cols; c++) html += `<div class="collab">${c + 1}</div>`;
+        g.style.gridTemplateColumns = `repeat(${plot.cols}, var(--cell))`;
+        let html = '';
         for (let r = 0; r < plot.rows; r++) {
-            html += `<div class="rowlab">${rowLetter(r)}</div>`;
             for (let c = 0; c < plot.cols; c++) {
                 const t = cells.get(r + ',' + c);
-                if (!t) { html += `<button type="button" class="cell" data-r="${r}" data-c="${c}" aria-label="Pasang tenda di ${rowLetter(r)}${c + 1}"></button>`; continue; }
+                if (!t) { html += `<button type="button" class="cell" data-r="${r}" data-c="${c}" aria-label="Pasang tenda di baris ${r + 1}, kolom ${c + 1}"></button>`; continue; }
                 const hay = (t.label + ' ' + t.guest + ' ' + t.note).toLowerCase();
                 const cls = ['cell', 'tent', t.status === 'blocked' ? 'blocked' : isTaken(t) ? 'taken' : '', t.id === selId ? 'sel' : '',
                              q ? (hay.includes(q) ? 'hit' : 'dim') : ''].join(' ');
                 html += `<button type="button" draggable="true" class="${cls}" data-id="${t.id}" data-r="${r}" data-c="${c}" title="${esc(t.label + (t.guest ? ' — ' + t.guest : ''))}">`
-                      + `<span class="lab">${esc(t.label)}</span>${t.guest ? `<span class="nm">${esc(t.guest)}</span>` : ''}</button>`;
+                      + `<span class="lab">${esc(t.label)}</span></button>`;
             }
         }
         g.innerHTML = html;
@@ -282,7 +277,7 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 
     function renderPanel() {
         const p = $('panel'), t = tents.find(x => x.id === selId);
-        if (!t) { p.innerHTML = '<h2>Detail tenda</h2><p class="hint">Klik sel kosong untuk memasang tenda, atau klik tenda untuk memberi nama tamu.<br><br>Seret tenda ke sel lain untuk memindah (atau menukar dengan tenda di sana).</p>'; return; }
+        if (!t) { p.innerHTML = '<h2>Detail tenda</h2><p class="hint">Klik sel kosong untuk memasang tenda, atau klik tenda untuk memberi nama tamu.<br><br>Seret tenda ke sel lain untuk memindah (atau pakai tombol Pindahkan di HP); lepas di atas tenda lain untuk menukar posisinya.</p>'; return; }
         p.innerHTML = `
             <h2>Tenda ${esc(t.label)}</h2>
             <div class="tf"><label for="fGuest">Nama tamu</label><input type="text" id="fGuest" maxlength="120" value="${esc(t.guest)}" placeholder="Ketik nama, atau cari pembeli di bawah" autocomplete="off"></div>
@@ -326,10 +321,10 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         });
     }
 
-    // Klik, seret, dan pindah
+    // Klik: pilih tenda, pasang tenda di sel kosong, atau tujuan pindah (layar sentuh tidak bisa drag)
     $('grid').addEventListener('click', async e => {
         const b = e.target.closest('.cell'); if (!b) return;
-        if (moveId !== null) {   // mode pindah (layar sentuh tidak bisa drag): ketuk sel tujuan
+        if (moveId !== null) {
             const id = moveId; moveId = null; document.body.classList.remove('moving');
             if (+b.dataset.id === id) { render(); return; }
             selId = id; apply(await api('move', { id, r: +b.dataset.r, c: +b.dataset.c }));
@@ -365,6 +360,13 @@ $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
     $('btnSeed').onclick = async () => {
         if (!confirm('Muat denah awal dari sketsa (99 tenda, nomor 1-102 tanpa 33, 60, 61)? Posisi bisa digeser setelahnya.')) return;
         apply(await api('seed')) && toast('Denah awal dimuat.');
+    };
+
+    $('btnReset').onclick = async () => {
+        const named = tents.filter(isTaken).length;
+        if (!confirm('Reset denah ke denah awal BONAFEST (99 tenda bernomor)? Semua posisi diulang' + (named ? ' dan ' + named + ' nama tamu yang sudah diisi akan HILANG' : '') + '.')) return;
+        selId = null;
+        apply(await api('reset')) && toast('Denah dikembalikan ke denah awal.');
     };
 
     api('load').then(apply);
