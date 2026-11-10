@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
         { href: "./#tentang", label: "Tentang" },
         { href: "archive", label: "Arsip" },
         { href: "bonafest", label: "Bonafest" },
+        { href: "merch", label: "Merch" },
     ];
     const CTA = { href: "index-event", label: "Tiket" };
     const STATUS_TEXT = "Transyogie, Indonesia";

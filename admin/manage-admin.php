@@ -1,7 +1,9 @@
 <?php
 require_once 'auth.php';  
 require_once '../config/config.php';
+require_once '../lib/admin-role.php';
 $pdo = getDBConnection();
+ensureAdminRoleColumn($pdo);
 
 $msg   = '';
 $error = '';
@@ -10,6 +12,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'add') {
     $username = trim($_POST['username']);
     $name     = trim($_POST['name']);
     $password = $_POST['password'];
+    $role     = ($_POST['role'] ?? '') === ADMIN_ROLE_SCANNER ? ADMIN_ROLE_SCANNER : ADMIN_ROLE_FULL;
 
     if (!$username || !$name || !$password) {
         $error = 'Semua field wajib diisi.';
@@ -22,8 +25,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'add') {
             $error = 'Username sudah digunakan.';
         } else {
             $hash = password_hash($password, PASSWORD_DEFAULT);
-            $pdo->prepare("INSERT INTO admins (username, name, password) VALUES (?,?,?)")
-                ->execute([$username, $name, $hash]);
+            $pdo->prepare("INSERT INTO admins (username, name, password, role) VALUES (?,?,?,?)")
+                ->execute([$username, $name, $hash, $role]);
             $msg = 'Admin baru berhasil ditambahkan.';
         }
     }
@@ -35,7 +38,7 @@ if (isset($_GET['delete']) && (int)$_GET['delete'] !== (int)$_SESSION['admin_id'
     header("Location: manage-admin?deleted=1"); exit;
 }
 
-$admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER BY created_at ASC")->fetchAll();
+$admins = $pdo->query("SELECT id, username, name, role, created_at FROM admins ORDER BY created_at ASC")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -197,7 +200,8 @@ $admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER B
         }
 
         input[type="text"],
-        input[type="password"] {
+        input[type="password"],
+        select {
             width: 100%;
             padding: 10px 14px;
             border: 1px solid #e5e5e5;
@@ -210,7 +214,8 @@ $admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER B
             appearance: none;
         }
 
-        input:focus { outline: none; border-color: #000000; }
+        select { appearance: auto; }
+        input:focus, select:focus { outline: none; border-color: #000000; }
         input::placeholder { color: rgba(0,0,0,0.25); }
 
         /* --- BUTTONS --- */
@@ -337,6 +342,12 @@ $admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER B
                 <label>Password *</label>
                 <input type="password" name="password" placeholder="Minimal 6 karakter" required>
 
+                <label>Role</label>
+                <select name="role">
+                    <option value="admin">Admin penuh (semua menu)</option>
+                    <option value="scanner"<?= ($_POST['role'] ?? '') === 'scanner' ? ' selected' : '' ?>>Scan tiket saja</option>
+                </select>
+
                 <button type="submit" class="btn btn-primary btn-full">Tambah Admin</button>
             </form>
         </div>
@@ -349,6 +360,7 @@ $admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER B
                     <tr>
                         <th>Nama</th>
                         <th>Username</th>
+                        <th>Role</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -364,6 +376,7 @@ $admins = $pdo->query("SELECT id, username, name, created_at FROM admins ORDER B
                         <td style="color:rgba(0,0,0,0.4);font-size:0.8rem">
                             <?= htmlspecialchars($a['username']) ?>
                         </td>
+                        <td style="font-size:0.8rem"><?= $a['role'] === ADMIN_ROLE_SCANNER ? 'Scan tiket' : 'Admin' ?></td>
                         <td>
                             <?php if ((int)$a['id'] !== (int)$_SESSION['admin_id']): ?>
                             <a href="?delete=<?= $a['id'] ?>"

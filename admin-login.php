@@ -7,7 +7,9 @@ if (isset($_SESSION['admin_logged_in'])) {
 
 require_once 'config/config.php';
 require_once 'lib/seo.php';
+require_once 'lib/admin-role.php';
 $pdo = getDBConnection();
+ensureAdminRoleColumn($pdo);
 
 $error = '';
 
@@ -24,7 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['admin_logged_in'] = true;
         $_SESSION['admin_id']        = $admin['id'];
         $_SESSION['admin_name']      = $admin['name'];
-        header("Location: admin/");
+        $_SESSION['admin_role']      = $admin['role'] ?? ADMIN_ROLE_FULL;
+        header('Location: ' . ($_SESSION['admin_role'] === ADMIN_ROLE_SCANNER ? 'admin/scan-tiket' : 'admin/'));
         exit;
     }
     $error = 'Username atau password salah.';

@@ -5,6 +5,7 @@
  * Pakai: taruh adminShellStyles() di <head> (paling akhir) dan adminShell() tepat setelah <body>.
  */
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../lib/admin-role.php';
 
 const ADMIN_NAV_ALIASES = ['order-edit' => 'orders', 'ticket-manage' => 'dashboard', 'event-edit' => 'dashboard', 'event-delete' => 'dashboard'];
 
@@ -15,10 +16,14 @@ function adminNavItems(): array
         'Events'   => [['event-add', 'Add Event', 'event-add']],
         'Sales'    => [['orders', 'Orders', 'orders'], ['ots-buy', 'On-the-spot', 'ots-buy'],
                        ['resend-email', 'Resend Email', 'resend-email'], ['announce', 'Announcement', 'announce']],
+        'Store'    => [['merch', 'Merch', 'merch'], ['merch-orders', 'Merch Orders', 'merch-orders']],
         'Door'     => [['scan-tiket', 'Scan Ticket', 'scan-tiket'], ['tent-plot', 'Tent Plot', 'tent-plot']],
         'Reports'  => [['report-event', 'Event Report', 'report-event'], ['gear-recap', 'Equipment Recap', 'gear-recap']],
         'Settings' => [['manage-admin', 'Manage Admins', 'manage-admin']],
     ];
+    if (adminIsScannerOnly()) {
+        return ['Door' => [['scan-tiket', 'Scan Ticket', 'scan-tiket']]];
+    }
     // Halaman yang hanya ada di komputer lokal tidak dimunculkan di server.
     if (is_file(__DIR__ . '/bonafest-input.php')) {
         $items['Reports'][] = ['bonafest-input', 'Input BONAFEST', 'bonafest-input'];

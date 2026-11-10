@@ -1,0 +1,114 @@
+/* Halaman merch (merch.php) dan detail produk (merch-detail.php). Memakai variabel dari site.css. */
+
+.merch-hero { padding-top: 48px; }
+.merch-hero-meta { display: flex; justify-content: space-between; gap: 16px; margin: 32px 0 0; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ---------- daftar ---------- */
+.merch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px 20px; padding-top: 56px; }
+.m-card { display: block; text-decoration: none; color: inherit; }
+.m-card-img { position: relative; aspect-ratio: 1; background: #f2f2f2; overflow: hidden; }
+.m-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .8s var(--spring); }
+.m-card:hover .m-card-img img { transform: scale(1.04); }
+.m-card-noimg { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.m-badge { position: absolute; left: 0; top: 0; padding: 5px 9px; background: #0a0a0a; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+.m-badge.out { background: #fff; color: #0a0a0a; border: 1px solid #0a0a0a; }
+.m-card-name { margin-top: 14px; font-size: 13px; line-height: 1.35; font-weight: 700; }
+.m-card-price { margin-top: 6px; font-size: 13px; }
+.m-was { margin-left: 8px; color: var(--text-dim); text-decoration: line-through; font-size: 11px; }
+.m-card.soldout .m-card-img img { filter: grayscale(1); opacity: .6; }
+.m-card.soldout { color: var(--text-dim); }
+
+/* ---------- detail ---------- */
+.m-back { display: inline-block; margin: 28px 0 24px; color: var(--text-dim); text-decoration: none; font-size: 12px; }
+.m-back:hover { color: var(--text); }
+.m-detail { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
+
+.m-gallery { position: sticky; top: calc(var(--header-height) + 24px); }
+.m-stage { position: relative; background: #f2f2f2; aspect-ratio: 1; }
+.m-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.m-track::-webkit-scrollbar { display: none; }
+.m-slide { flex: 0 0 100%; scroll-snap-align: center; }
+.m-slide img { width: 100%; height: 100%; object-fit: contain; display: block; background: #fff; }
+.m-count { position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: rgba(255,255,255,.9); font-size: 11px; }
+.m-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%; background: rgba(255,255,255,.92); cursor: pointer; font: inherit; font-size: 16px; line-height: 1; }
+.m-arrow:hover { background: #0a0a0a; color: #fff; border-color: #0a0a0a; }
+.m-arrow.prev { left: 12px; } .m-arrow.next { right: 12px; }
+.m-thumbs { display: flex; gap: 10px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
+.m-thumbs::-webkit-scrollbar { display: none; }
+.m-thumb { flex: 0 0 64px; height: 64px; padding: 0; border: 1px solid var(--line); background: #f2f2f2; cursor: pointer; overflow: hidden; opacity: .65; }
+.m-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.m-thumb.on { border: 2px solid #0a0a0a; opacity: 1; }
+
+.m-info h1 { font-size: clamp(20px, 2.6vw, 30px); line-height: 1.15; font-weight: 700; letter-spacing: -.03em; }
+.m-price-box { margin: 22px 0; padding: 18px 20px; background: #fafafa; border: 1px solid var(--line); display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.m-price { font-size: 26px; font-weight: 700; letter-spacing: -.03em; }
+.m-price-was { color: var(--text-dim); text-decoration: line-through; font-size: 13px; }
+.m-off { padding: 3px 8px; background: #0a0a0a; color: #fff; font-size: 11px; font-weight: 700; }
+.m-label { margin: 24px 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); }
+.m-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.m-chip { position: relative; }
+.m-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.m-chip span { display: block; min-width: 56px; padding: 10px 16px; border: 1px solid var(--line); text-align: center; font-size: 12px; cursor: pointer; transition: border-color .2s, background .2s; }
+.m-chip input:checked + span { border-color: #0a0a0a; box-shadow: inset 0 0 0 1px #0a0a0a; font-weight: 700; }
+.m-chip input:focus-visible + span { outline: 2px solid #0a0a0a; outline-offset: 2px; }
+.m-chip input:disabled + span { color: #b5b5b5; text-decoration: line-through; cursor: not-allowed; background: #fafafa; }
+.m-qty-row { display: flex; align-items: center; gap: 16px; }
+.m-qty { display: inline-flex; border: 1px solid var(--line); }
+.m-qty button { width: 40px; height: 40px; border: 0; background: #fff; font: inherit; font-size: 16px; cursor: pointer; }
+.m-qty button:hover:not(:disabled) { background: #0a0a0a; color: #fff; }
+.m-qty button:disabled { color: #c4c4c4; cursor: not-allowed; }
+.m-qty output { width: 48px; display: flex; align-items: center; justify-content: center; font-size: 13px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.m-stock { font-size: 12px; color: var(--text-dim); }
+.m-total { margin-top: 26px; display: flex; justify-content: space-between; align-items: baseline; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+.m-total strong { font-size: 20px; letter-spacing: -.02em; text-transform: none; }
+.m-buy { display: block; width: 100%; margin-top: 16px; padding: 18px; border: 1px solid #0a0a0a; background: #0a0a0a; color: #fff; font: inherit; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; cursor: pointer; text-align: center; text-decoration: none; transition: opacity .2s; }
+.m-buy:hover:not(:disabled) { opacity: .8; }
+.m-buy:disabled { background: #e9e9e9; border-color: #e9e9e9; color: #9a9a9a; cursor: not-allowed; }
+.m-hint { margin-top: 10px; font-size: 11px; color: var(--text-dim); line-height: 1.6; }
+.m-desc { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
+.m-desc h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); margin-bottom: 12px; }
+.m-desc p { font-size: 13px; line-height: 1.8; white-space: pre-line; }
+
+.m-po { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); font-size: 12px; line-height: 1.6; }
+.m-po b { display: block; }
+.m-po-open { border-color: #0a0a0a; }
+.m-po-soon, .m-po-closed { background: #fafafa; color: var(--text-dim); }
+
+.m-dialog { width: min(480px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 28px; border: 1px solid #0a0a0a; background: #fff; color: inherit; margin: auto; }
+.m-dialog::backdrop { background: rgba(0,0,0,.5); }
+.m-dialog h2 { font-size: 20px; letter-spacing: -.03em; margin-bottom: 6px; padding-right: 36px; }
+.m-dx { position: absolute; right: 12px; top: 10px; width: 36px; height: 36px; border: 0; background: none; font-size: 24px; cursor: pointer; }
+.m-od-sum { font-size: 12px; color: var(--text-dim); margin-bottom: 18px; line-height: 1.6; }
+.m-dialog label { display: block; margin-bottom: 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); }
+.m-dialog input, .m-dialog textarea { display: block; width: 100%; margin-top: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 0; font: inherit; font-size: 16px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text); background: #fff; }
+.m-dialog input:focus-visible, .m-dialog textarea:focus-visible { outline: 2px solid #0a0a0a; outline-offset: 1px; }
+.m-dialog .m-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.m-od-err { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #b00020; color: #b00020; font-size: 12px; }
+.m-bank { display: flex; flex-direction: column; gap: 4px; padding: 18px; border: 1px solid var(--line); background: #fafafa; font-size: 13px; }
+.m-bank strong { font-size: 24px; letter-spacing: .02em; }
+.m-bank button { align-self: flex-start; margin-top: 8px; padding: 8px 12px; border: 1px solid #0a0a0a; background: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.m-bank button:hover { background: #0a0a0a; color: #fff; }
+.m-bank-total { margin: 14px 0 4px; font-size: 13px; }
+.m-bank-total strong { font-size: 18px; }
+
+/* bar beli yang menempel di bawah (layar HP) */
+.m-sticky { display: none; }
+
+@media (max-width: 1000px) { .merch-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) {
+    .merch-hero { padding-top: 28px; }
+    .merch-grid { grid-template-columns: repeat(2, 1fr); gap: 32px 14px; padding-top: 36px; }
+    .m-detail { grid-template-columns: 1fr; gap: 28px; }
+    .m-gallery { position: static; margin: 0 calc(var(--gutter) * -1); }
+    .m-thumbs { padding: 0 var(--gutter); }
+    .m-arrow { display: none; }
+    .m-price { font-size: 21px; }
+    .m-price-box { padding: 14px 16px; }
+    .m-buy.inline { display: none; }
+    .m-sticky { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 150; align-items: stretch; background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+    .m-sticky .tot { flex: 1; padding: 10px var(--gutter); display: flex; flex-direction: column; justify-content: center; font-size: 11px; color: var(--text-dim); }
+    .m-sticky .tot strong { color: var(--text); font-size: 16px; letter-spacing: -.02em; }
+    .m-sticky .m-buy { width: auto; margin: 0; flex: 0 0 46%; border-radius: 0; }
+    body.has-sticky footer { margin-bottom: 64px; }
+}
+@media (prefers-reduced-motion: reduce) { .m-card-img img { transition: none; } }

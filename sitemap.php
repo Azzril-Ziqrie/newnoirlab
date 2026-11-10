@@ -14,6 +14,7 @@ $staticPages = [
     ['path' => 'community',   'priority' => '0.6', 'changefreq' => 'weekly',  'files' => ['community.php', 'lib/community-data.php']],
     ['path' => 'access',      'priority' => '0.6', 'changefreq' => 'monthly', 'files' => ['access.php', 'lib/access-data.php']],
     ['path' => 'archive',     'priority' => '0.6', 'changefreq' => 'monthly', 'files' => ['archive.php']],
+    ['path' => 'merch',       'priority' => '0.6', 'changefreq' => 'weekly',  'files' => ['merch.php', 'lib/merch.php']],
     ['path' => 'faq',         'priority' => '0.5', 'changefreq' => 'monthly', 'files' => ['faq.php']],
 ];
 
