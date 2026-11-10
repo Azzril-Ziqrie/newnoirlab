@@ -91,7 +91,38 @@ function ensureMerchTables(PDO $pdo): void
             $pdo->exec("ALTER TABLE merch_products ADD COLUMN $col DATE NULL");
         }
     }
+    merchSeedIfEmpty($pdo);
     $done = true;
+}
+
+/** Produk awal (Rasamala dan Tie-Dye), diisi otomatis kalau tabel produk masih kosong. */
+function merchSeedIfEmpty(PDO $pdo): void
+{
+    if ((int)$pdo->query('SELECT COUNT(*) FROM merch_products')->fetchColumn() > 0) {
+        return;
+    }
+    $about = "Artwork by @mahdialbart";
+    $products = [
+        ['Rasamala T-Shirt', 190000, 1,
+         "Rooted in the spirit of Rasamala.\n\nThe Rasamala T-Shirt carries an exclusive artwork by Mahdi Albart, inspired by the tree that becomes the central idea of Bona Fest 2026. A piece to remember the stories, encounters, and moments shared in the forest.\n\nAvailable in black, sizes S, M, L, and XL.\n\n$about",
+         ['merch_rasamala_depan', 'merch_rasamala_belakang', 'merch_bona_foto_3', 'merch_bona_foto_1']],
+        ['Bona Tie-Dye T-Shirt', 220000, 2,
+         "A piece of Bona Fest 2026 to take home.\n\nBona Tie-Dye T-Shirt features the official Bona Fest 2026 artwork by Mahdi Albart, finished with a tie-dye treatment that makes each piece part of the festival's visual identity.\n\nAvailable in sizes S, M, L, and XL.\n\n$about",
+         ['merch_tiedye_depan', 'merch_tiedye_belakang', 'merch_bona_foto_2', 'merch_bona_foto_1']],
+    ];
+    $insProduct = $pdo->prepare("INSERT INTO merch_products (name, description, price, stock, status, sort_order) VALUES (?, ?, ?, 0, 'active', ?)");
+    $insImage   = $pdo->prepare('INSERT INTO merch_images (product_id, path, sort_order) VALUES (?, ?, ?)');
+    $insVariant = $pdo->prepare('INSERT INTO merch_variants (product_id, name, stock, sort_order) VALUES (?, ?, 100, ?)');
+    foreach ($products as [$name, $price, $order, $description, $images]) {
+        $insProduct->execute([$name, $description, $price, $order]);
+        $id = (int)$pdo->lastInsertId();
+        foreach ($images as $i => $file) {
+            $insImage->execute([$id, MERCH_UPLOAD_URL . $file . '.webp', $i]);
+        }
+        foreach (['S', 'M', 'L', 'XL'] as $i => $size) {
+            $insVariant->execute([$id, $size, $i]);
+        }
+    }
 }
 
 /** Status periode PO: 'none' (tanpa PO), 'soon', 'open', atau 'closed'. */
