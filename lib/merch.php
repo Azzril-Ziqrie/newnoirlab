@@ -11,7 +11,7 @@
  */
 require_once __DIR__ . '/../config/config.php';
 
-const MERCH_WA_NUMBER       = '62895386847552';
+const MERCH_WA_NUMBER       = '6281380259349';
 const MERCH_UPLOAD_DIR      = __DIR__ . '/../assets/merch/';
 const MERCH_UPLOAD_URL      = 'assets/merch/';
 const MERCH_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
