@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/db-bootstrap.php';
 
 /**
  * Ambil event dari database. Mengembalikan array kosong kalau database tidak bisa dihubungi,
@@ -9,6 +10,7 @@ require_once __DIR__ . '/../config/config.php';
  */
 function fetchEvents(string $status = 'all', int $limit = 100): array
 {
+    ensureDatabase();
     try {
         $pdo = new PDO(
             'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET,
@@ -32,6 +34,7 @@ function fetchEvents(string $status = 'all', int $limit = 100): array
 
 function connectDatabase(): PDO
 {
+    ensureDatabase();
     return new PDO(
         'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET,
         DB_USER,
