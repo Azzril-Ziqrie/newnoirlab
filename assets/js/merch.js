@@ -55,9 +55,9 @@
             $('off').textContent = '-' + Math.round((MERCH.compare - unit()) / MERCH.compare * 100) + '%';
         }
 
-        $('stock').textContent = hasVariants && !variant
-            ? (MERCH.variants.some((v) => v.stock > 0) ? 'Pilih varian untuk melihat stok' : 'Stok habis')
-            : (stock() > 0 ? 'Stok ' + stock() : 'Stok habis');
+        // jumlah stok tidak ditampilkan; hanya penanda bila habis
+        const soldOut = hasVariants && !variant ? !MERCH.variants.some((v) => v.stock > 0) : stock() < 1;
+        $('stock').textContent = soldOut ? 'Stok habis' : '';
 
         const anyStock = hasVariants ? MERCH.variants.some((v) => v.stock > 0) : MERCH.stock > 0;
         const label = !poOpen ? (MERCH.po === 'soon' ? 'PO belum dibuka' : 'PO ditutup')

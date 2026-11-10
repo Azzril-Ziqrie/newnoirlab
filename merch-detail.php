@@ -145,7 +145,7 @@ $clientData = [
                         <output id="qty" aria-live="polite">1</output>
                         <button type="button" id="plus" aria-label="Tambah">+</button>
                     </div>
-                    <span class="m-stock" id="stock"><?= $stock > 0 ? ($hasVariants ? 'Pilih varian untuk melihat stok' : 'Stok ' . $stock) : 'Stok habis' ?></span>
+                    <span class="m-stock" id="stock"><?= $stock > 0 ? '' : 'Stok habis' ?></span>
                 </div>
 
                 <div class="m-total"><span>Total</span><strong id="total"><?= e(merchRupiah($lo)) ?></strong></div>
