@@ -79,7 +79,7 @@ $clientData = [
     <link rel="stylesheet" href="assets/css/site.css">
     <link rel="stylesheet" href="assets/css/merch.css?v=<?= @filemtime(__DIR__ . '/assets/css/merch.css') ?>">
 </head>
-<body class="has-sticky">
+<body class="has-sticky merch-page">
     <?php include __DIR__ . '/loader.php'; ?>
 
     <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
@@ -212,7 +212,17 @@ $clientData = [
             <button class="m-sheet-x" type="button" id="sz-close" aria-label="Tutup">&times;</button>
         </div>
         <div class="m-sheet-body">
-            <img src="assets/merch/size-chart.jpeg" alt="Tabel ukuran kaos dan hoodie: panjang dan lebar dalam cm" width="699" height="699" decoding="async">
+            <table class="m-sizetable">
+                <caption class="sr-only">Ukuran kaos dalam cm</caption>
+                <thead><tr><th scope="col">Ukuran</th><th scope="col">Panjang</th><th scope="col">Lebar</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">S</th><td>68–70</td><td>45–47</td></tr>
+                    <tr><th scope="row">M</th><td>72–74</td><td>49–52</td></tr>
+                    <tr><th scope="row">L</th><td>75–77</td><td>54–57</td></tr>
+                    <tr><th scope="row">XL</th><td>78–80</td><td>59–62</td></tr>
+                    <tr><th scope="row">XXL</th><td>81–83</td><td>62–64</td></tr>
+                </tbody>
+            </table>
             <p>Ukuran dalam cm, bahan sudah preshrunk. Beda 1–2 cm itu wajar. Ragu? Ukur kaos favoritmu dan cocokkan dengan tabel.</p>
         </div>
     </dialog>

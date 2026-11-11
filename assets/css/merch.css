@@ -3,17 +3,21 @@
 .merch-hero { padding-top: 48px; }
 .merch-hero-meta { display: flex; justify-content: space-between; gap: 16px; margin: 32px 0 0; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
 
+/* footer selalu di dasar layar, walau isi halaman pendek */
+body.merch-page { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+body.merch-page > main { flex: 1 0 auto; }
+
 /* ---------- daftar ---------- */
-.merch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px 20px; padding-top: 56px; }
-.m-card { display: block; text-decoration: none; color: inherit; }
-.m-card-img { position: relative; aspect-ratio: 1; background: #f2f2f2; overflow: hidden; }
-.m-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .8s var(--spring); }
+.merch-grid { --cols: 4; --gap: 24px; display: flex; flex-wrap: wrap; justify-content: center; gap: 44px var(--gap); padding-top: 56px; }
+.m-card { display: block; flex: 0 1 calc((100% - var(--gap) * (var(--cols) - 1)) / var(--cols)); min-width: 0; text-decoration: none; color: inherit; }
+.m-card-img { position: relative; aspect-ratio: 2 / 3; background: #f2f2f2; border-radius: 16px; overflow: hidden; }
+.m-card-img img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform .8s var(--spring); }
 .m-card:hover .m-card-img img { transform: scale(1.04); }
 .m-card-noimg { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
-.m-badge { position: absolute; left: 0; top: 0; padding: 5px 9px; background: #0a0a0a; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+.m-badge { position: absolute; left: 10px; top: 10px; padding: 5px 10px; border-radius: 99px; background: #0a0a0a; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
 .m-badge.out { background: #fff; color: #0a0a0a; border: 1px solid #0a0a0a; }
-.m-card-name { margin-top: 14px; font-size: 13px; line-height: 1.35; font-weight: 700; }
-.m-card-price { margin-top: 6px; font-size: 13px; }
+.m-card-name { margin-top: 14px; padding: 0 4px; font-size: 13px; line-height: 1.35; font-weight: 700; }
+.m-card-price { margin-top: 6px; padding: 0 4px; font-size: 13px; }
 .m-was { margin-left: 8px; color: var(--text-dim); text-decoration: line-through; font-size: 11px; }
 .m-card.soldout .m-card-img img { filter: grayscale(1); opacity: .6; }
 .m-card.soldout { color: var(--text-dim); }
@@ -108,16 +112,33 @@
 .m-sheet-x { width: 32px; height: 32px; border: 0; border-radius: 50%; background: #f0f0f0; font-size: 20px; line-height: 1; cursor: pointer; }
 .m-sheet-x:active { transform: scale(.92); }
 .m-sheet-body { overflow-y: auto; padding: 4px 20px 24px; -webkit-overflow-scrolling: touch; }
-.m-sheet-body img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.m-sizetable { width: 100%; border-collapse: collapse; border: 1px solid #0a0a0a; font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; }
+.m-sizetable th, .m-sizetable td { padding: 12px 8px; }
+.m-sizetable thead th { border-bottom: 1px solid #0a0a0a; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; }
+.m-sizetable tbody th { font-weight: 700; }
+.m-sizetable tbody tr + tr > * { border-top: 1px solid var(--line); }
+.m-sizetable tbody th, .m-sizetable thead th:first-child { border-right: 1px solid #0a0a0a; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .m-sheet-body p { margin-top: 14px; font-size: 12px; line-height: 1.7; color: var(--text-dim); }
 
 /* bar beli yang menempel di bawah (layar HP) */
 .m-sticky { display: none; }
 
-@media (max-width: 1000px) { .merch-grid { grid-template-columns: repeat(3, 1fr); } }
+/* desktop: foto ditumpuk ke bawah (scroll), info produk menempel di sisi kanan */
+@media (min-width: 901px) {
+    .m-gallery { position: static; }
+    .m-stage { aspect-ratio: auto; background: none; }
+    .m-track { flex-direction: column; gap: 16px; overflow: visible; scroll-snap-type: none; height: auto; }
+    .m-slide { flex: none; }
+    .m-slide img { height: auto; border-radius: 16px; background: #f2f2f2; }
+    .m-arrow, .m-count, .m-thumbs { display: none; }
+    .m-info { position: sticky; top: calc(var(--header-height) + 24px); max-height: calc(100vh - var(--header-height) - 48px); overflow-y: auto; scrollbar-width: none; }
+    .m-info::-webkit-scrollbar { display: none; }
+}
+@media (max-width: 1000px) { .merch-grid { --cols: 3; } }
 @media (max-width: 900px) {
     .merch-hero { padding-top: 28px; }
-    .merch-grid { grid-template-columns: repeat(2, 1fr); gap: 32px 14px; padding-top: 36px; }
+    .merch-grid { --cols: 2; --gap: 14px; gap: 32px var(--gap); padding-top: 36px; }
     .m-detail { grid-template-columns: 1fr; gap: 28px; }
     .m-gallery { position: static; margin: 0 calc(var(--gutter) * -1); }
     .m-thumbs { padding: 0 var(--gutter); }

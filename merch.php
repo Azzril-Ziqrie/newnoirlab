@@ -27,7 +27,7 @@ $pageSchemas = [seoBreadcrumbSchema([['Noirlab Collective', ''], ['Merch', 'merc
     <link rel="stylesheet" href="assets/css/site.css">
     <link rel="stylesheet" href="assets/css/merch.css?v=<?= @filemtime(__DIR__ . '/assets/css/merch.css') ?>">
 </head>
-<body>
+<body class="merch-page">
     <?php include __DIR__ . '/loader.php'; ?>
 
     <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
