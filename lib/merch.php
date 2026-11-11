@@ -24,6 +24,13 @@ const MERCH_MAX_QTY         = 10;
 const MERCH_MAX_PRICE       = 100000000;
 const MERCH_IMAGE_TYPES     = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif'];
 
+/** URL foto + versi dari waktu ubah file, supaya foto yang diganti tidak tertahan cache browser (cache gambar 1 tahun). */
+function merchImgUrl(string $path): string
+{
+    $file = __DIR__ . '/../' . $path;
+    return is_file($file) ? $path . '?v=' . filemtime($file) : $path;
+}
+
 /** Kesalahan yang aman ditampilkan ke admin (bukan bug server). */
 class MerchException extends RuntimeException {}
 

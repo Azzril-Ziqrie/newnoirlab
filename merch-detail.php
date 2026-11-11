@@ -95,7 +95,7 @@ $clientData = [
                     <?php if ($images): ?>
                     <div class="m-track" id="track">
                         <?php foreach ($images as $i => $img): ?>
-                        <div class="m-slide"><img src="<?= e($img['path']) ?>" alt="<?= e($product['name']) ?> <?= $i + 1 ?>" <?= $i ? 'loading="lazy"' : '' ?> decoding="async"></div>
+                        <div class="m-slide"><img src="<?= e(merchImgUrl($img['path'])) ?>" alt="<?= e($product['name']) ?> <?= $i + 1 ?>" <?= $i ? 'loading="lazy"' : '' ?> decoding="async"></div>
                         <?php endforeach; ?>
                     </div>
                     <?php if (count($images) > 1): ?>
@@ -110,7 +110,7 @@ $clientData = [
                 <?php if (count($images) > 1): ?>
                 <div class="m-thumbs" id="thumbs">
                     <?php foreach ($images as $i => $img): ?>
-                    <button class="m-thumb<?= $i === 0 ? ' on' : '' ?>" type="button" data-i="<?= $i ?>" aria-label="Foto <?= $i + 1 ?>"><img src="<?= e($img['path']) ?>" alt="" loading="lazy"></button>
+                    <button class="m-thumb<?= $i === 0 ? ' on' : '' ?>" type="button" data-i="<?= $i ?>" aria-label="Foto <?= $i + 1 ?>"><img src="<?= e(merchImgUrl($img['path'])) ?>" alt="" loading="lazy"></button>
                     <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
@@ -127,7 +127,13 @@ $clientData = [
                 </div>
 
                 <?php if ($hasVariants): ?>
-                <div class="m-label">Pilih varian</div>
+                <div class="m-label-row">
+                    <div class="m-label">Pilih ukuran</div>
+                    <button class="m-sizebtn" type="button" id="size-open" aria-haspopup="dialog">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg>
+                        Panduan ukuran
+                    </button>
+                </div>
                 <div class="m-chips" id="chips" role="radiogroup" aria-label="Varian">
                     <?php foreach ($product['variants'] as $v): ?>
                     <label class="m-chip">
@@ -197,6 +203,20 @@ $clientData = [
             <a class="m-buy" id="od-wa" href="#" target="_blank" rel="noopener">Sudah transfer, konfirmasi via WhatsApp</a>
         </div>
     </dialog>
+
+    <?php if ($hasVariants): ?>
+    <dialog class="m-sheet" id="size-dialog" aria-labelledby="sz-title">
+        <div class="m-sheet-grab" id="sz-grab" aria-hidden="true"><i></i></div>
+        <div class="m-sheet-head">
+            <h2 id="sz-title">Panduan ukuran</h2>
+            <button class="m-sheet-x" type="button" id="sz-close" aria-label="Tutup">&times;</button>
+        </div>
+        <div class="m-sheet-body">
+            <img src="assets/merch/size-chart.jpeg" alt="Tabel ukuran kaos dan hoodie: panjang dan lebar dalam cm" width="699" height="699" decoding="async">
+            <p>Ukuran dalam cm, bahan sudah preshrunk. Beda 1–2 cm itu wajar. Ragu? Ukur kaos favoritmu dan cocokkan dengan tabel.</p>
+        </div>
+    </dialog>
+    <?php endif; ?>
 
     <footer>
         <div class="page foot">

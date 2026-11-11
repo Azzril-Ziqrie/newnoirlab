@@ -53,7 +53,7 @@ $pageSchemas = [seoBreadcrumbSchema([['Noirlab Collective', ''], ['Merch', 'merc
                 ?>
                 <a class="m-card rv<?= $stock < 1 ? ' soldout' : '' ?>" href="merch-detail?id=<?= $p['id'] ?>">
                     <div class="m-card-img">
-                        <?php if ($cover): ?><img src="<?= e($cover) ?>" alt="<?= e($p['name']) ?>" loading="lazy" decoding="async">
+                        <?php if ($cover): ?><img src="<?= e(merchImgUrl($cover)) ?>" alt="<?= e($p['name']) ?>" loading="lazy" decoding="async">
                         <?php else: ?><div class="m-card-noimg">Foto segera hadir</div><?php endif; ?>
                         <?php if ($stock < 1): ?><span class="m-badge out">Habis</span>
                         <?php elseif ($off): ?><span class="m-badge">-<?= $off ?>%</span><?php endif; ?>

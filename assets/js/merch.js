@@ -137,5 +137,73 @@
         catch (_) { e.target.textContent = 'Salin manual: ' + MERCH.account; }
     });
 
+    /* ---------- panduan ukuran: dialog di desktop, bottom sheet yang bisa ditarik di HP ---------- */
+    const szOpen = $('size-open'), sz = $('size-dialog');
+    if (szOpen && sz) {
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+        const isSheet = () => matchMedia('(max-width: 900px)').matches;
+        const SPRING = 'cubic-bezier(.32,.72,0,1)';
+        let anim = null, closing = false;
+
+        const stop = () => { if (anim) { anim.cancel(); anim = null; } };
+        const run = (frames, ms) => {
+            stop();
+            if (reduce.matches) return { finished: Promise.resolve() };
+            anim = sz.animate(frames, { duration: ms, easing: SPRING, fill: 'forwards' });
+            return anim;
+        };
+        const finishClose = () => { closing = false; stop(); sz.style.transform = ''; sz.close(); };
+        const closeSheet = () => {
+            if (closing || !sz.open) return;
+            closing = true;
+            const out = isSheet() ? { transform: 'translateY(100%)' } : { opacity: 0, transform: 'scale(.96)' };
+            run([{ transform: getComputedStyle(sz).transform === 'none' ? 'none' : getComputedStyle(sz).transform }, out], 260).finished.then(finishClose, finishClose);
+        };
+
+        szOpen.addEventListener('click', () => {
+            sz.showModal();
+            run(isSheet() ? [{ transform: 'translateY(100%)' }, { transform: 'none' }] : [{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], 420)
+                .finished.then(() => { if (anim) { anim.commitStyles(); stop(); } }, () => {});
+        });
+        $('sz-close').addEventListener('click', closeSheet);
+        sz.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
+        sz.addEventListener('click', (e) => { if (e.target === sz) closeSheet(); }); // klik area gelap
+
+        // tarik ke bawah (hanya HP): ikuti jari 1:1, lepas dengan momentum
+        const grab = [$('sz-grab'), sz.querySelector('.m-sheet-head')];
+        grab.forEach((h) => {
+            let y0 = null, dy = 0, hist = [];
+            h.addEventListener('pointerdown', (e) => {
+                if (!isSheet() || closing) return;
+                stop(); y0 = e.clientY; dy = 0; hist = [[e.timeStamp, e.clientY]];
+                h.setPointerCapture(e.pointerId);
+            });
+            h.addEventListener('pointermove', (e) => {
+                if (y0 === null) return;
+                const raw = e.clientY - y0;
+                dy = raw < 0 ? -Math.sqrt(-raw) * 2 : raw; // ke atas: perlawanan seperti karet
+                sz.style.transform = `translateY(${dy}px)`;
+                hist.push([e.timeStamp, e.clientY]); if (hist.length > 5) hist.shift();
+            });
+            const end = (e) => {
+                if (y0 === null) return;
+                y0 = null;
+                const a = hist[0], b = hist[hist.length - 1];
+                const v = b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) * 1000 : 0; // px/s
+                const projected = dy + (v / 1000) * 0.998 / (1 - 0.998) * 0.25;
+                if (e.type !== 'pointercancel' && projected > sz.offsetHeight * 0.4) {
+                    closing = true;
+                    sz.animate([{ transform: `translateY(${dy}px)` }, { transform: 'translateY(100%)' }], { duration: 240, easing: SPRING, fill: 'forwards' })
+                        .finished.then(finishClose, finishClose);
+                } else {
+                    const back = sz.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 380, easing: SPRING });
+                    sz.style.transform = '';
+                }
+            };
+            h.addEventListener('pointerup', end);
+            h.addEventListener('pointercancel', end);
+        });
+    }
+
     render();
 })();
