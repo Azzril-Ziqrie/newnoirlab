@@ -108,7 +108,7 @@ function merchSeedIfEmpty(PDO $pdo): void
          ['merch_rasamala_depan', 'merch_rasamala_belakang', 'merch_bona_foto_3', 'merch_bona_foto_1']],
         ['Bona Tie-Dye T-Shirt', 220000, 2,
          "A piece of Bona Fest 2026 to take home.\n\nBona Tie-Dye T-Shirt features the official Bona Fest 2026 artwork by Mahdi Albart, finished with a tie-dye treatment that makes each piece part of the festival's visual identity.\n\nAvailable in sizes S, M, L, and XL.\n\n$about",
-         ['merch_tiedye_depan', 'merch_tiedye_belakang', 'merch_bona_foto_2', 'merch_bona_foto_1']],
+         ['merch_tiedye_depan', 'merch_bona_foto_2', 'merch_bona_foto_1']],
     ];
     $insProduct = $pdo->prepare("INSERT INTO merch_products (name, description, price, stock, status, sort_order) VALUES (?, ?, ?, 0, 'active', ?)");
     $insImage   = $pdo->prepare('INSERT INTO merch_images (product_id, path, sort_order) VALUES (?, ?, ?)');
